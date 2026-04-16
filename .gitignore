@@ -1,0 +1,30 @@
+# Flutter
+build/
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+*.lock
+**/android/.gradle/
+**/android/local.properties
+**/android/app/google-services.json
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
+*.db
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Storage (nigdy nie commitujemy filmow/muzyki)
+backend/storage/
+backend/db/
