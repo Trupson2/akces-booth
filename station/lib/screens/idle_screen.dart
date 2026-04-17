@@ -119,62 +119,36 @@ class _Greeting extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final h = constraints.maxHeight;
-
-        // Total budget: emoji + title + subtitle + 2*spacing
-        // Trzymamy w ~85% dostepnego h zeby zostal oddech.
-        final budget = h * 0.85;
-        final titleSize = (budget * 0.28).clamp(20.0, 56.0);
-        final emojiSize = (budget * 0.32).clamp(28.0, 72.0);
-        final subSize = (budget * 0.10).clamp(11.0, 16.0);
-
-        return FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.center,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: constraints.maxWidth,
-              maxHeight: h,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('👋', style: TextStyle(fontSize: emojiSize)),
-                const SizedBox(height: 6),
-                Text(
-                  'Wejdz na platforme',
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: titleSize,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    'Usmiech, pozycja, klik START - film bedzie za 30s',
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: AppTheme.muted,
-                      fontSize: subSize,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
+    // FittedBox skaluje cala kolumne do dostepnego miejsca - nigdy overflow.
+    return const FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('👋', style: TextStyle(fontSize: 48)),
+          SizedBox(height: 4),
+          Text(
+            'Wejdz na platforme',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 36,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.5,
             ),
           ),
-        );
-      },
+          SizedBox(height: 4),
+          Text(
+            'Usmiech, pozycja, klik START',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppTheme.muted,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
