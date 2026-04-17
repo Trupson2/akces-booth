@@ -8,6 +8,7 @@ import '../models/recording_mode.dart';
 import '../models/recording_resolution.dart';
 import '../services/camera_service.dart';
 import '../services/motor_controller.dart';
+import '../services/station_client.dart';
 import '../theme/app_theme.dart';
 import 'preview_screen.dart';
 
@@ -42,6 +43,21 @@ class _RecordingScreenState extends State<RecordingScreen>
     _lastFpsDegraded = camera.highFpsDegraded;
     _lastResDegraded = camera.resolutionDegraded;
     camera.addListener(_onCameraChange);
+
+    // Sluchamy komend ze Station (auto-start/stop).
+    final client = context.read<StationClient>();
+    client.onStartRequested = () {
+      if (!mounted) return;
+      if (!context.read<CameraService>().isRecording) {
+        _toggleRecord();
+      }
+    };
+    client.onStopRequested = () {
+      if (!mounted) return;
+      if (context.read<CameraService>().isRecording) {
+        _stopRecording();
+      }
+    };
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!camera.isInitialized && camera.status != CameraInitStatus.initializing) {
@@ -82,6 +98,9 @@ class _RecordingScreenState extends State<RecordingScreen>
 
   @override
   void dispose() {
+    final client = context.read<StationClient>();
+    client.onStartRequested = null;
+    client.onStopRequested = null;
     context.read<CameraService>().removeListener(_onCameraChange);
     _autoStopTimer?.cancel();
     _uiTimer?.cancel();
@@ -92,6 +111,7 @@ class _RecordingScreenState extends State<RecordingScreen>
   Future<void> _toggleRecord() async {
     final camera = context.read<CameraService>();
     final motor = context.read<MotorController>();
+    final client = context.read<StationClient>();
 
     if (camera.isRecording) {
       await _stopRecording();
@@ -103,6 +123,7 @@ class _RecordingScreenState extends State<RecordingScreen>
       await motor.start();
       await camera.startRecording();
     } catch (e) {
+      client.sendError('start: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Nie udalo sie rozpoczac: $e')),
@@ -111,12 +132,21 @@ class _RecordingScreenState extends State<RecordingScreen>
       return;
     }
 
-    // Odtwarzamy UI timer (rebuild co 100ms)
+    client.sendRecordingStarted();
+
+    // Odtwarzamy UI timer (rebuild co 100ms) + wysylamy progress co 200ms.
     _uiTimer?.cancel();
-    _uiTimer = Timer.periodic(
-      const Duration(milliseconds: 100),
-      (_) => setState(() {}),
-    );
+    int tick = 0;
+    _uiTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      if (!mounted) return;
+      setState(() {});
+      tick++;
+      if (tick % 2 == 0) {
+        final elapsed = camera.recordingDuration.inMilliseconds;
+        final total = _kMaxRecording.inMilliseconds;
+        client.sendRecordingProgress((elapsed / total).clamp(0.0, 1.0));
+      }
+    });
 
     // Auto-stop po 8s
     _autoStopTimer?.cancel();
@@ -131,14 +161,48 @@ class _RecordingScreenState extends State<RecordingScreen>
 
     final camera = context.read<CameraService>();
     final motor = context.read<MotorController>();
+    final client = context.read<StationClient>();
 
     final path = await camera.stopRecording();
     await motor.stop();
+    client.sendRecordingStopped();
 
-    if (!mounted || path == null) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => PreviewScreen(videoPath: path)),
-    );
+    if (path == null) return;
+
+    // Real mode: jesli Station online, wysylamy plik (z upload progress jako
+    // processing_progress). Potem wracamy do Home (Station pokaze preview).
+    // Mock mode / no Station: idziemy do lokalnego PreviewScreen.
+    if (client.isConnected) {
+      // Na razie bez FFmpeg - od razu upload.
+      // Raportujemy pseudo "processing_done" zeby Station przeszla do transfer.
+      client.sendProcessingProgress(0.0);
+      client.sendProcessingDone();
+
+      final ok = await client.uploadVideo(path);
+      if (!mounted) return;
+      if (ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Wyslano do Station. Gosc oglada na tablecie.'),
+          ),
+        );
+        Navigator.of(context).maybePop();
+      } else {
+        // Upload fail - pokaz lokalnie zeby uratowac film.
+        await Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(
+            builder: (_) => PreviewScreen(videoPath: path),
+          ),
+        );
+      }
+    } else {
+      if (!mounted) return;
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => PreviewScreen(videoPath: path),
+        ),
+      );
+    }
   }
 
   @override

@@ -6,12 +6,18 @@ import 'app.dart';
 import 'services/camera_service.dart';
 import 'services/mock_motor_controller.dart';
 import 'services/motor_controller.dart';
+import 'services/station_client.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations(const [
     DeviceOrientation.portraitUp,
   ]);
+
+  final stationClient = StationClient();
+  // Fire-and-forget - jesli jest zapamietany IP, od razu probuje sie polaczyc.
+  unawaited(stationClient.loadAndConnect());
+
   runApp(
     MultiProvider(
       providers: [
@@ -21,8 +27,14 @@ Future<void> main() async {
         ChangeNotifierProvider<CameraService>(
           create: (_) => CameraService(),
         ),
+        ChangeNotifierProvider<StationClient>.value(value: stationClient),
       ],
       child: const AkcesBoothRecorder(),
     ),
   );
+}
+
+void unawaited(Future<void> f) {
+  // Tylko do debug - nie zjadamy errorow.
+  f.catchError((Object e) => debugPrint('unawaited error: $e'));
 }

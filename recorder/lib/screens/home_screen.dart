@@ -3,10 +3,12 @@ import 'package:provider/provider.dart';
 
 import '../models/motor_state.dart';
 import '../services/motor_controller.dart';
+import '../services/station_client.dart';
 import '../theme/app_theme.dart';
 import '../widgets/big_button.dart';
 import '../widgets/status_indicator.dart';
 import 'recording_screen.dart';
+import 'station_setup_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -138,6 +140,29 @@ class _StatusColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final motor = context.watch<MotorController>();
+    final client = context.watch<StationClient>();
+
+    String stationValue;
+    Color stationColor;
+    switch (client.state) {
+      case StationConnState.connected:
+        stationValue = client.ip ?? '?';
+        stationColor = AppTheme.success;
+        break;
+      case StationConnState.connecting:
+        stationValue = 'Lacze...';
+        stationColor = AppTheme.muted;
+        break;
+      case StationConnState.error:
+        stationValue = 'Blad (tap)';
+        stationColor = AppTheme.error;
+        break;
+      case StationConnState.disconnected:
+        stationValue = client.ip == null ? 'Skonfiguruj' : 'Brak polaczenia';
+        stationColor = AppTheme.muted;
+        break;
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -155,11 +180,19 @@ class _StatusColumn extends StatelessWidget {
           color: AppTheme.success,
         ),
         const SizedBox(height: 8),
-        const StatusIndicator(
-          icon: Icons.tablet_mac_rounded,
-          label: 'TABLET',
-          value: 'Oczekiwanie (Sesja 3)',
-          color: AppTheme.muted,
+        InkWell(
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const StationSetupScreen(),
+            ),
+          ),
+          borderRadius: BorderRadius.circular(12),
+          child: StatusIndicator(
+            icon: Icons.tablet_mac_rounded,
+            label: 'STATION',
+            value: stationValue,
+            color: stationColor,
+          ),
         ),
       ],
     );
