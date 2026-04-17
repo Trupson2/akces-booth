@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Polityka prywatności · Akces Booth{% endblock %}
+
+{% block content %}
+<main class="max-w-3xl mx-auto px-6 py-16 text-slate-200">
+  <a href="/early-access" class="text-sm text-slate-400 hover:text-white">
+    ← wróć do landingu
+  </a>
+
+  <h1 class="text-4xl font-black mt-6 mb-2">Polityka prywatności</h1>
+  <p class="text-slate-400 text-sm mb-10">
+    Ostatnia aktualizacja: 18 kwietnia 2026
+  </p>
+
+  <section class="prose prose-invert space-y-6 text-slate-300 leading-relaxed">
+
+    <h2 class="text-xl font-bold text-white mt-8">1. Kto jest administratorem danych</h2>
+    <p>
+      Administratorem Twoich danych osobowych jest
+      <strong>Adrian, prowadzący jednoosobową działalność gospodarczą
+      pod marką Akces 360</strong>, z siedzibą w Mieszkowicach.
+      Kontakt: <a href="mailto:adrian@akces360.pl" class="text-indigo-400">adrian@akces360.pl</a>.
+    </p>
+
+    <h2 class="text-xl font-bold text-white mt-8">2. Jakie dane zbieramy</h2>
+    <p>
+      Gdy zapisujesz się na listę early access strony
+      <code>booth.akces360.pl/early-access</code>, zapisujemy:
+    </p>
+    <ul class="list-disc pl-6 space-y-1">
+      <li>Twój <strong>adres e-mail</strong>,</li>
+      <li>Informację o zaznaczonej zgodzie na otrzymywanie informacji o early access,</li>
+      <li>Adres IP oraz nagłówek User-Agent Twojej przeglądarki (cel: ochrona przed spamem i nadużyciami),</li>
+      <li>Znacznik czasowy zapisu.</li>
+    </ul>
+    <p>
+      Nie zbieramy imienia, nazwiska, numeru telefonu, adresu, płatności ani
+      żadnych kategorii szczególnych danych osobowych.
+    </p>
+
+    <h2 class="text-xl font-bold text-white mt-8">3. Po co</h2>
+    <ul class="list-disc pl-6 space-y-1">
+      <li>Żeby napisać do Ciebie, kiedy Akces Booth będzie gotowy do testów,</li>
+      <li>Żeby zapytać Cię (raz, nie częściej) o opinie na etapie walidacji produktu,</li>
+      <li>Żeby ustalić cenę zamrożoną dla early birds.</li>
+    </ul>
+    <p>
+      Nie wysyłamy newslettera marketingowego, nie profilujemy, nie sprzedajemy
+      listy osobom trzecim i nie udostępniamy jej zewnętrznym dostawcom poza
+      infrastrukturą hostingową opisaną niżej.
+    </p>
+
+    <h2 class="text-xl font-bold text-white mt-8">4. Podstawa prawna (RODO)</h2>
+    <p>
+      Przetwarzanie odbywa się na podstawie <strong>Twojej zgody</strong>
+      (art. 6 ust. 1 lit. a RODO) wyrażonej w momencie zaznaczenia checkboxa.
+      Dane IP i User-Agent przetwarzamy na podstawie prawnie uzasadnionego
+      interesu administratora (art. 6 ust. 1 lit. f RODO) - ochrony formularza
+      przed spamem i automatami.
+    </p>
+
+    <h2 class="text-xl font-bold text-white mt-8">5. Gdzie są przechowywane</h2>
+    <p>
+      Na prywatnym serwerze Raspberry Pi zlokalizowanym w Polsce,
+      w bazie SQLite. Dostęp do danych ma wyłącznie administrator
+      (Adrian). Połączenie do formularza jest szyfrowane HTTPS
+      (Cloudflare Tunnel).
+    </p>
+
+    <h2 class="text-xl font-bold text-white mt-8">6. Jak długo</h2>
+    <p>
+      Do momentu wycofania przez Ciebie zgody, albo do 24 miesięcy od
+      ostatniej interakcji - co nastąpi wcześniej. Potem kasujemy.
+    </p>
+
+    <h2 class="text-xl font-bold text-white mt-8">7. Twoje prawa</h2>
+    <p>Masz prawo:</p>
+    <ul class="list-disc pl-6 space-y-1">
+      <li>dostępu do swoich danych,</li>
+      <li>sprostowania,</li>
+      <li>usunięcia („prawo do bycia zapomnianym"),</li>
+      <li>wycofania zgody w dowolnym momencie (wystarczy mail),</li>
+      <li>wniesienia skargi do Prezesa Urzędu Ochrony Danych Osobowych
+          (<a href="https://uodo.gov.pl" class="text-indigo-400" target="_blank">uodo.gov.pl</a>).</li>
+    </ul>
+
+    <h2 class="text-xl font-bold text-white mt-8">8. Cookies</h2>
+    <p>
+      Strona używa jednego ciasteczka technicznego w
+      <code>localStorage</code> - żeby pamiętać, że już zamknąłeś baner
+      zgody. Nie używamy cookies analitycznych (brak Google Analytics,
+      brak Meta Pixel), ani reklamowych. Czcionki ładujemy z Google Fonts
+      (CDN), które może zapisywać anonimowe dane technicznie niezbędne
+      do renderowania fontów.
+    </p>
+
+    <h2 class="text-xl font-bold text-white mt-8">9. Chcesz żebyśmy Cię zapomnieli?</h2>
+    <p>
+      Napisz jedno zdanie na
+      <a href="mailto:adrian@akces360.pl" class="text-indigo-400">adrian@akces360.pl</a> -
+      w ciągu 7 dni usuwamy Twój wpis bez pytań.
+    </p>
+
+  </section>
+</main>
+{% endblock %}

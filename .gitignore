@@ -32,3 +32,12 @@ reverse/
 recorder/assets/music/*.webm
 recorder/assets/music/*.mp3
 recorder/assets/music/*.m4a
+
+# Flask session filestore (per-deployment)
+backend/db/sessions/
+
+# Claude Design JSX exports (duplicate source - reference only, kept out of VCS)
+design/
+
+# Claude Code project-local launch config (per-machine)
+.claude/

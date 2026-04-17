@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Akces Booth · Polska fotobudka 360°</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #0B1220; }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: #0F172A;
+    overflow-x: hidden;
+  }
+  ::selection { background: rgba(249,115,22,0.3); color: inherit; }
+
+  a:hover { opacity: 0.75; }
+  button:active { transform: scale(0.98); }
+
+  /* mobile nav simplification */
+  @media (max-width: 720px) {
+    .nav-links a:not([href="#zapis"]) { display: none; }
+  }
+  @media (max-width: 720px) {
+    .pricing-card { grid-template-columns: 1fr !important; gap: 32px !important; padding: 28px !important; }
+    .founder-grid { grid-template-columns: 1fr !important; gap: 24px !important; }
+    .hero-peek-grid { grid-template-columns: 1fr !important; }
+    .hero-peek-grid > div:first-child { display: none; }
+  }
+
+  /* Tweaks panel */
+  .tweaks-panel {
+    position: fixed; bottom: 24px; right: 24px; z-index: 1000;
+    background: rgba(11,18,32,0.95);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px; padding: 20px;
+    min-width: 280px; max-width: 320px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    font-family: 'Inter', system-ui;
+    color: #fff;
+    display: none;
+  }
+  .tweaks-panel.active { display: block; }
+  .tweaks-panel h3 {
+    font-size: 13px; font-weight: 600; margin: 0 0 16px;
+    letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px;
+  }
+  .tweaks-panel label {
+    display: block; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: rgba(255,255,255,0.5);
+    margin: 16px 0 8px; font-family: 'JetBrains Mono', monospace;
+  }
+  .tweaks-panel label:first-of-type { margin-top: 0; }
+  .tweak-opt {
+    display: block; width: 100%; padding: 10px 12px; margin-bottom: 6px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px; color: rgba(255,255,255,0.7);
+    font-family: 'Inter', system-ui; font-size: 13px; text-align: left;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .tweak-opt:hover { background: rgba(255,255,255,0.08); }
+  .tweak-opt.active {
+    background: rgba(249,115,22,0.12);
+    border-color: rgba(249,115,22,0.35);
+    color: #FB923C;
+  }
+  .tweak-slider {
+    width: 100%; accent-color: #F97316; margin-top: 4px;
+  }
+  .tweak-val {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    color: #FB923C; float: right;
+  }
+
+  /* RODO / cookie banner */
+  .cookie-banner {
+    position: fixed; bottom: 16px; left: 16px; right: 16px;
+    z-index: 999;
+    background: rgba(11,18,32,0.98);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px; padding: 16px 20px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+    font-family: 'Inter', system-ui; color: #fff; font-size: 13px;
+    display: none; align-items: center; gap: 16px; flex-wrap: wrap;
+    max-width: 920px; margin: 0 auto;
+  }
+  .cookie-banner.show { display: flex; }
+  .cookie-banner p { margin: 0; flex: 1 1 280px; color: rgba(255,255,255,0.8); line-height: 1.5; }
+  .cookie-banner a { color: #FB923C; }
+  .cookie-banner button {
+    padding: 10px 18px; border-radius: 10px; border: none;
+    font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .cookie-accept { background: #F97316; color: #fff; }
+  .cookie-dismiss { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<!-- RODO / cookie banner (localStorage dismissal) -->
+<div class="cookie-banner" id="cookie-banner" role="dialog" aria-live="polite">
+  <p>
+    Ta strona uzywa minimalnej ilosci ciasteczek technicznych, potrzebnych do
+    dzialania formularza zapisu. Nie profilujemy, nie mamy trackerow reklamowych.
+    Szczegoly w <a href="/polityka-prywatnosci" target="_blank">polityce prywatnosci</a>.
+  </p>
+  <button type="button" class="cookie-accept" id="cookie-accept">OK, rozumiem</button>
+</div>
+
+<!-- Tweaks UI (hidden until activated) -->
+<div class="tweaks-panel" id="tweaks-panel">
+  <h3>
+    <span style="width: 6px; height: 6px; border-radius: 50%; background: #F97316; box-shadow: 0 0 8px #F97316;"></span>
+    Tweaks
+  </h3>
+  <label>Hero copy</label>
+  <button class="tweak-opt" data-tweak="heroVariant" data-value="safe">Bezpieczna · "Bez logo producenta"</button>
+  <button class="tweak-opt" data-tweak="heroVariant" data-value="bold">Śmielsza · "Cudze logo na twoich filmach"</button>
+</div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="frames/ios-frame.jsx"></script>
+<script type="text/babel" src="frames/android-frame.jsx"></script>
+<script type="text/babel" src="components/sections.jsx"></script>
+<script type="text/babel" src="components/flow.jsx"></script>
+<script type="text/babel" src="components/closing.jsx"></script>
+<script type="text/babel" src="components/faq.jsx"></script>
+
+<script>
+  // Tweakable defaults — rewritten on disk by __edit_mode_set_keys
+  window.TWEAKS = /*EDITMODE-BEGIN*/{
+    "heroVariant": "safe"
+  }/*EDITMODE-END*/;
+</script>
+
+<script type="text/babel">
+  function App() {
+    const [tweaks, setTweaks] = React.useState(window.TWEAKS);
+
+    React.useEffect(() => {
+      window.__setTweaks = (patch) => setTweaks(t => ({ ...t, ...patch }));
+    }, []);
+
+    return (
+      <div>
+        <Hero variant={tweaks.heroVariant} socialCount={tweaks.socialCount} />
+        <ProblemSection />
+        <SolutionSection />
+        <FlowSection />
+        <PricingSection />
+        <FounderSection />
+        <FaqSection />
+        <SignupSection socialCount={tweaks.socialCount} />
+        <Footer />
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+
+<script>
+  // Tweaks protocol
+  (function() {
+    const panel = document.getElementById('tweaks-panel');
+
+    // 1. Register listener FIRST
+    window.addEventListener('message', (e) => {
+      if (!e.data || typeof e.data !== 'object') return;
+      if (e.data.type === '__activate_edit_mode') panel.classList.add('active');
+      if (e.data.type === '__deactivate_edit_mode') panel.classList.remove('active');
+    });
+
+    // 2. Announce availability
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+
+    // Wire up controls
+    function applyAndPersist(key, value) {
+      if (window.__setTweaks) window.__setTweaks({ [key]: value });
+      window.TWEAKS[key] = value;
+      window.parent.postMessage({
+        type: '__edit_mode_set_keys',
+        edits: { [key]: value }
+      }, '*');
+      refreshActive();
+    }
+
+    function refreshActive() {
+      document.querySelectorAll('.tweak-opt').forEach(btn => {
+        const key = btn.dataset.tweak;
+        const val = btn.dataset.value;
+        const active = String(window.TWEAKS[key]) === val;
+        btn.classList.toggle('active', active);
+      });
+    }
+
+    document.querySelectorAll('.tweak-opt').forEach(btn => {
+      btn.addEventListener('click', () => {
+        applyAndPersist(btn.dataset.tweak, btn.dataset.value);
+      });
+    });
+
+    // Initial sync after React mounts
+    setTimeout(refreshActive, 300);
+  })();
+</script>
+
+<script>
+  // RODO cookie banner - pokazuje sie raz na urzadzenie.
+  (function() {
+    const KEY = 'akces_booth_cookie_ack_v1';
+    const banner = document.getElementById('cookie-banner');
+    const accept = document.getElementById('cookie-accept');
+    let shouldShow = false;
+    try { shouldShow = !localStorage.getItem(KEY); } catch (_) { shouldShow = true; }
+    if (shouldShow) banner.classList.add('show');
+    accept.addEventListener('click', () => {
+      try { localStorage.setItem(KEY, '1'); } catch (_) {}
+      banner.classList.remove('show');
+    });
+  })();
+</script>
+
+</body>
+</html>

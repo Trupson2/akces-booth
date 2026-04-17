@@ -24,6 +24,7 @@ from api.share import share_bp
 from api.events import events_bp
 from api.library import library_bp
 from api.ai import ai_bp
+from api.early_access import early_access_bp
 from admin.routes import admin_bp
 
 
@@ -53,6 +54,7 @@ def create_app() -> Flask:
     app.register_blueprint(events_bp, url_prefix="/api/events")
     app.register_blueprint(library_bp, url_prefix="/api/library")
     app.register_blueprint(ai_bp, url_prefix="/api/ai")
+    app.register_blueprint(early_access_bp)  # /early-access + /api/early-access/signup
     app.register_blueprint(admin_bp, url_prefix="/admin")
 
     @app.route("/")

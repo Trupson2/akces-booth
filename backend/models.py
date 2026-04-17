@@ -76,9 +76,20 @@ CREATE TABLE IF NOT EXISTS event_templates (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS early_access_signups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL,
+    consent INTEGER DEFAULT 1,
+    ip TEXT,
+    user_agent TEXT,
+    hero_variant TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_videos_event ON videos(event_id);
 CREATE INDEX IF NOT EXISTS idx_videos_short_id ON videos(short_id);
 CREATE INDEX IF NOT EXISTS idx_events_active ON events(is_active);
+CREATE INDEX IF NOT EXISTS idx_early_access_email ON early_access_signups(email);
 """
 
 # Bez 0/O/l/1 - latwe do odczytu z QR / wpisania recznie.
@@ -103,6 +114,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE videos ADD COLUMN published_to_facebook_at TIMESTAMP"
         )
+    # early_access_signups table is in SCHEMA (CREATE IF NOT EXISTS) - nic do migrowania
 
 
 @contextmanager
@@ -250,6 +262,51 @@ def unmark_video_publish(db_path: Path, video_id: int) -> None:
             "UPDATE videos SET publish_to_facebook = 0 WHERE id = ?",
             (video_id,),
         )
+
+
+# --- Early Access signups -------------------------------------------------------
+
+def insert_early_access_signup(
+    db_path: Path,
+    *,
+    email: str,
+    consent: bool = True,
+    ip: str | None = None,
+    user_agent: str | None = None,
+    hero_variant: str | None = None,
+) -> int:
+    """Zapisuje email z landing /early-access. Zwraca id nowego wiersza.
+
+    Email nie ma UNIQUE constraint - jesli ktos zapisze sie dwa razy, traktujemy
+    to jako wzmocniony sygnal zainteresowania, nie blad.
+    """
+    with get_conn(db_path) as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO early_access_signups
+                (email, consent, ip, user_agent, hero_variant)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (email, 1 if consent else 0, ip, user_agent, hero_variant),
+        )
+        return int(cur.lastrowid or 0)
+
+
+def list_early_access_signups(db_path: Path) -> list[dict[str, Any]]:
+    with get_conn(db_path) as conn:
+        rows = conn.execute(
+            "SELECT * FROM early_access_signups ORDER BY created_at DESC"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def count_early_access_signups(db_path: Path) -> int:
+    """Do wyswietlenia realnego licznika na landingu, gdy przekroczymy 0."""
+    with get_conn(db_path) as conn:
+        row = conn.execute(
+            "SELECT COUNT(DISTINCT email) AS c FROM early_access_signups"
+        ).fetchone()
+    return int(row["c"] or 0)
 
 
 def get_video_by_short_id(db_path: Path, short_id: str) -> dict[str, Any] | None:
