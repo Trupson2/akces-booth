@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -163,11 +164,34 @@ class _PreviewScreenState extends State<PreviewScreen> {
         child: CircularProgressIndicator(color: AppTheme.primary),
       );
     }
-    return Center(
-      child: AspectRatio(
-        aspectRatio: _controller!.value.aspectRatio,
-        child: VideoPlayer(_controller!),
-      ),
+    final ctrl = _controller!;
+    // Film z OnePlusa jest pionowy (9:16), tablet landscape. Zeby wypelnic
+    // ekran - w tle powiekszona rozmazana kopia, na wierzchu film w orygnalnym
+    // aspect ratio. Instagram/TikTok style.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Blurred fill background
+        FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: ctrl.value.size.width,
+            height: ctrl.value.size.height,
+            child: VideoPlayer(ctrl),
+          ),
+        ),
+        BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+          child: Container(color: Colors.black.withValues(alpha: 0.25)),
+        ),
+        // Centered video in original aspect
+        Center(
+          child: AspectRatio(
+            aspectRatio: ctrl.value.aspectRatio,
+            child: VideoPlayer(ctrl),
+          ),
+        ),
+      ],
     );
   }
 }
