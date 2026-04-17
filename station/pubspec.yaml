@@ -1,0 +1,29 @@
+name: akces_booth_station
+description: "Akces Booth Station - interfejs goscia na Tab A11+."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.11.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  provider: ^6.1.0
+  flutter_blue_plus: ^1.32.0
+  permission_handler: ^11.3.0
+  shared_preferences: ^2.2.0
+  google_fonts: ^6.2.0
+  qr_flutter: ^4.1.0
+  video_player: ^2.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
