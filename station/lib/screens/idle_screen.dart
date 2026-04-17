@@ -56,10 +56,11 @@ class IdleScreen extends StatelessWidget {
                     ],
                   ),
 
-                  // Greeting - dominuje ekran
+                  // Greeting - dominuje ekran, ale zawsze sie miesci
                   const Expanded(
-                    child: Center(
-                      child: _Greeting(),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Center(child: _Greeting()),
                     ),
                   ),
 
@@ -120,48 +121,58 @@ class _Greeting extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Skalujemy z wysokosci dostepnego miejsca - na telefonach landscape
-        // miejsca jest malo, na Tab A11+ (800px) duzo.
         final h = constraints.maxHeight;
-        final titleSize = (h * 0.22).clamp(28.0, 56.0);
-        final emojiSize = (h * 0.26).clamp(36.0, 72.0);
-        final subSize = (h * 0.08).clamp(12.0, 16.0);
 
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text('👋', style: TextStyle(fontSize: emojiSize)),
-            const SizedBox(height: 6),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                'Wejdz na platforme',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: titleSize,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.5,
-                ),
-              ),
+        // Total budget: emoji + title + subtitle + 2*spacing
+        // Trzymamy w ~85% dostepnego h zeby zostal oddech.
+        final budget = h * 0.85;
+        final titleSize = (budget * 0.28).clamp(20.0, 56.0);
+        final emojiSize = (budget * 0.32).clamp(28.0, 72.0);
+        final subSize = (budget * 0.10).clamp(11.0, 16.0);
+
+        return FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.center,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: constraints.maxWidth,
+              maxHeight: h,
             ),
-            const SizedBox(height: 6),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'Usmiech, pozycja, klik START - film bedzie za 30s',
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: AppTheme.muted,
-                  fontSize: subSize,
-                  fontWeight: FontWeight.w500,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('👋', style: TextStyle(fontSize: emojiSize)),
+                const SizedBox(height: 6),
+                Text(
+                  'Wejdz na platforme',
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: titleSize,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                  ),
                 ),
-              ),
+                const SizedBox(height: 4),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Usmiech, pozycja, klik START - film bedzie za 30s',
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppTheme.muted,
+                      fontSize: subSize,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
