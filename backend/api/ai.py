@@ -177,10 +177,15 @@ def generate_overlays():  # type: ignore[no-untyped-def]
         path = overlay_dir / filename
         path.write_bytes(img_bytes)
         overlay_name = f"{names} {style} v{i+1}".strip()
+        # Zapisujemy path relative do BASE_DIR jesli mozliwe, inaczej absolute.
+        try:
+            rel_path = str(path.resolve().relative_to(Config.BASE_DIR.resolve()))
+        except ValueError:
+            rel_path = str(path)
         overlay_id = models.insert_overlay(
             Config.DB_PATH,
             name=overlay_name,
-            file_path=str(path.relative_to(Config.BASE_DIR)),
+            file_path=rel_path,
             source="ai_generated",
             ai_prompt=prompt,
             tags=[event_type, style],
