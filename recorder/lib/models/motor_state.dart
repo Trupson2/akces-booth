@@ -11,7 +11,9 @@ extension DirectionX on Direction {
 
 class MotorState {
   static const int minSpeed = 1;
-  static const int maxSpeed = 10;
+  // ChackTok UI ma max 8. Na eventach weselnych zalecane 3-5 zeby goscie
+  // sie nie zachwiali.
+  static const int maxSpeed = 8;
 
   final bool connected;
   final bool running;

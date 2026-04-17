@@ -27,4 +27,5 @@ Thumbs.db
 
 # Storage (nigdy nie commitujemy filmow/muzyki)
 backend/storage/
-backend/db/
+backend/db/reverse/
+reverse/

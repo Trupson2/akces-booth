@@ -113,7 +113,7 @@ class _TopBar extends StatelessWidget {
                 ),
               ),
               Text(
-                'Sesja 1 - mock motor',
+                'Sesja 7 - BLE 360 Controller',
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(color: AppTheme.muted, fontSize: 11),
               ),
@@ -169,7 +169,7 @@ class _StatusColumn extends StatelessWidget {
         StatusIndicator(
           icon: Icons.bluetooth_rounded,
           label: 'BLUETOOTH',
-          value: motor.isConnected ? 'Connected (mock)' : 'Connecting...',
+          value: motor.isConnected ? '360 Controller polaczony' : 'Laczenie...',
           color: motor.isConnected ? AppTheme.success : AppTheme.muted,
         ),
         const SizedBox(height: 8),
@@ -401,7 +401,7 @@ class _DebugLogButton extends StatelessWidget {
                   color: AppTheme.muted, size: 18),
               const SizedBox(width: 10),
               const Text(
-                'DEBUG LOG (MOCK BLE)',
+                'DEBUG LOG (BLE 360)',
                 style: TextStyle(
                   color: AppTheme.muted,
                   fontSize: 11,
@@ -474,7 +474,7 @@ class _DebugLogSheet extends StatelessWidget {
                         color: AppTheme.muted, size: 18),
                     const SizedBox(width: 8),
                     const Text(
-                      'DEBUG LOG (MOCK BLE)',
+                      'DEBUG LOG (BLE 360)',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 13,

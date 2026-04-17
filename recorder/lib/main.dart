@@ -4,8 +4,8 @@ import 'package:provider/provider.dart';
 
 import 'app.dart';
 import 'services/camera_service.dart';
-import 'services/mock_motor_controller.dart';
 import 'services/motor_controller.dart';
+import 'services/real_motor_controller.dart';
 import 'services/station_client.dart';
 
 Future<void> main() async {
@@ -22,7 +22,7 @@ Future<void> main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider<MotorController>(
-          create: (_) => MockMotorController(),
+          create: (_) => RealMotorController(),
         ),
         ChangeNotifierProvider<CameraService>(
           create: (_) => CameraService(),
