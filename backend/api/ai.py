@@ -2,13 +2,13 @@
 
 Flow:
 1. Uzytkownik wypelnia formularz (typ eventu, styl, motyw, imiona, data).
-2. Gemini 1.5 Pro generuje prompt dla Imagen.
-3. Imagen 3 generuje 3 warianty ramek PNG.
+2. Gemini 2.5 Pro generuje prompt dla image model.
+3. gemini-2.5-flash-image generuje N wariantow ramek PNG.
 4. Zapisujemy w `storage/overlays/ai_*.png` + wpisy w library_overlays.
-5. Zwracamy JSON z listą wariantów (id + url).
+5. Zwracamy JSON z lista wariantow.
 
-Jesli Gemini/Imagen niedostepne (brak API key, blad network) - zwracamy blad
-z czytelnym komunikatem zeby user wiedzial co fixnac.
+Uzywamy nowego `google-genai` pakietu (starszy `google-generativeai`
+zostal zdeprecjonowany w pazdzierniku 2025).
 """
 from __future__ import annotations
 
@@ -28,6 +28,10 @@ log = logging.getLogger(__name__)
 
 ai_bp = Blueprint("ai", __name__)
 
+# Modele Google AI (stan na listopad 2025)
+TEXT_MODEL = "gemini-2.5-flash"           # szybki, do pisania promptow
+IMAGE_MODEL = "gemini-2.5-flash-image"    # generuje obrazy (Imagen 3 deprecated)
+
 
 def _have_gemini() -> bool:
     return bool(Config.GEMINI_API_KEY)
@@ -35,43 +39,43 @@ def _have_gemini() -> bool:
 
 def _build_imagen_prompt(*, event_type: str, style: str, theme: str,
                         names: str, event_date: str) -> str:
-    """Fallback prompt jesli Gemini nie odpowie - w pewnym skroconym stylu."""
+    """Fallback prompt jesli Gemini nie odpowie."""
     return (
         f"Transparent PNG 1920x1080 photo booth overlay for {event_type}. "
         f"Style: {style}. Decorative edges only, center 60% empty. "
         f"Names: {names}. Date: {event_date}. Theme: {theme or 'elegant'}. "
-        f"Elegant typography, no borders inside central area, suitable for "
-        f"professional photo booth rental."
+        f"Elegant typography, no borders inside central area."
     )
 
 
 def _refine_prompt_with_gemini(**kwargs: str) -> str:
-    """Uses Gemini to craft better Imagen prompt. Fallback on error."""
+    """Uzywa Gemini do napisania lepszego prompta dla image modelu."""
     fallback = _build_imagen_prompt(**kwargs)
     if not _have_gemini():
         return fallback
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=Config.GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-1.5-pro")
-        resp = model.generate_content(
-            f"""Create a prompt for Imagen 3 to generate a photo booth video overlay frame.
+        from google import genai  # type: ignore[import-not-found]
 
-Event type: {kwargs['event_type']}
-Style: {kwargs['style']}
-Theme: {kwargs.get('theme') or '(none)'}
-Names/Brand: {kwargs['names']}
-Date: {kwargs['event_date']}
-
-Requirements:
-- Transparent PNG 1920x1080 landscape
-- Center 60% area must be empty (video will appear there)
-- Decorations only on edges: corners, top/bottom borders
-- Elegant typography with names
-- Style matches {kwargs['style']} aesthetic
-- Suitable for professional photo booth rental
-
-Output ONLY the Imagen prompt, no explanation, no markdown."""
+        client = genai.Client(api_key=Config.GEMINI_API_KEY)
+        resp = client.models.generate_content(
+            model=TEXT_MODEL,
+            contents=(
+                "Create a detailed prompt for an AI image generator to produce "
+                "a photo booth video overlay frame.\n\n"
+                f"Event type: {kwargs['event_type']}\n"
+                f"Style: {kwargs['style']}\n"
+                f"Theme: {kwargs.get('theme') or '(none)'}\n"
+                f"Names/Brand: {kwargs['names']}\n"
+                f"Date: {kwargs['event_date']}\n\n"
+                "Requirements:\n"
+                "- Transparent PNG 1920x1080 landscape\n"
+                "- Center 60% area must be empty (video appears there)\n"
+                "- Decorations only on edges: corners, top/bottom borders\n"
+                "- Elegant typography with names clearly visible\n"
+                f"- Style matches {kwargs['style']} aesthetic\n"
+                "- Suitable for professional photo booth rental\n\n"
+                "Output ONLY the image generation prompt, no explanation, no markdown."
+            ),
         )
         text = (resp.text or "").strip()
         return text or fallback
@@ -80,66 +84,54 @@ Output ONLY the Imagen prompt, no explanation, no markdown."""
         return fallback
 
 
-def _generate_images_imagen(prompt: str, count: int = 3) -> list[bytes]:
-    """Generuje obrazy przez Imagen 3. Rzuca wyjatek jesli API nie dostepne."""
+def _generate_images(prompt: str, count: int = 3) -> list[bytes]:
+    """Generuje obrazy przez gemini-2.5-flash-image.
+
+    Raise RuntimeError jesli niedostepne.
+    """
     if not _have_gemini():
         raise RuntimeError(
-            "GEMINI_API_KEY not set - cannot call Imagen API. "
+            "GEMINI_API_KEY not set - cannot call image API. "
             "Configure .env and restart."
         )
 
-    import google.generativeai as genai
-    genai.configure(api_key=Config.GEMINI_API_KEY)
+    from google import genai  # type: ignore[import-not-found]
 
-    # Google SDK - Imagen 3 endpoint. SDK ma rozne interfejsy zaleznie od wersji.
-    # Probujemy kilka podejsc, bierzemy pierwsze ktore zadziala.
+    client = genai.Client(api_key=Config.GEMINI_API_KEY)
+    images: list[bytes] = []
     last_err: Exception | None = None
 
-    # Preferujemy nowy klient `google-genai` jesli zainstalowany.
-    try:
-        from google import genai as new_genai  # type: ignore[import-not-found]
-        client = new_genai.Client(api_key=Config.GEMINI_API_KEY)
-        result = client.models.generate_images(
-            model="imagen-3.0-generate-002",
-            prompt=prompt,
-            config={"number_of_images": count, "aspect_ratio": "16:9"},
-        )
-        images = []
-        for gen in result.generated_images or []:
-            data = gen.image.image_bytes  # type: ignore[attr-defined]
-            images.append(data if isinstance(data, bytes) else bytes(data))
-        if images:
-            return images
-    except ImportError:
-        pass
-    except Exception as e:  # noqa: BLE001
-        last_err = e
-
-    # Fallback: stary google-generativeai (moze nie dzialac dla Imagen).
-    try:
-        model = genai.GenerativeModel("models/imagen-3.0-generate-001")
-        out: list[bytes] = []
-        for _ in range(count):
-            resp = model.generate_content(prompt)
-            for cand in getattr(resp, "candidates", []) or []:
-                for part in getattr(cand.content, "parts", []) or []:
+    # Gemini 2.5 flash image generuje 1 obraz per request. Wywolamy N razy.
+    for i in range(count):
+        try:
+            resp = client.models.generate_content(
+                model=IMAGE_MODEL,
+                contents=prompt,
+            )
+            # Zbieraj inline image data z kandydatow
+            for cand in resp.candidates or []:
+                if not cand.content or not cand.content.parts:
+                    continue
+                for part in cand.content.parts:
                     inline = getattr(part, "inline_data", None)
-                    if inline and getattr(inline, "data", None):
-                        raw = inline.data
-                        if isinstance(raw, str):
-                            raw = base64.b64decode(raw)
-                        out.append(bytes(raw))
-                        break
-        if out:
-            return out
-    except Exception as e:  # noqa: BLE001
-        last_err = e
+                    if inline is None:
+                        continue
+                    data = inline.data
+                    if isinstance(data, str):
+                        data = base64.b64decode(data)
+                    images.append(bytes(data))
+                    break
+                if len(images) > i:
+                    break
+        except Exception as e:  # noqa: BLE001
+            last_err = e
+            log.warning("Image gen %d/%d fail: %s", i + 1, count, e)
 
-    raise RuntimeError(
-        "Imagen 3 generation failed. "
-        f"Install `google-genai` lub upewnij sie ze google-generativeai ma Imagen. "
-        f"Ostatni blad: {last_err}"
-    )
+    if not images:
+        raise RuntimeError(
+            f"Image generation failed - zero outputs. Ostatni blad: {last_err}"
+        )
+    return images
 
 
 @ai_bp.route("/generate-overlays", methods=["POST"])
@@ -163,16 +155,16 @@ def generate_overlays():  # type: ignore[no-untyped-def]
     )
 
     try:
-        images = _generate_images_imagen(prompt, count=count)
+        images = _generate_images(prompt, count=count)
     except Exception as e:  # noqa: BLE001
         log.error("AI generation failed: %s", e)
-        # Zwracamy 200 z error w body - inaczej Cloudflare podmienia 502 na HTML.
+        # 200 OK z error body - Cloudflare nie podmienia na HTML page.
         return jsonify({
             "success": False,
             "error": "generation_failed",
             "message": str(e),
-            "hint": "Dodaj GEMINI_API_KEY do .env na serwerze i zrestartuj "
-                    "akces-booth.service. Klucz dostaniesz w aistudio.google.com.",
+            "hint": "Sprawdz GEMINI_API_KEY w .env. Klucz z aistudio.google.com. "
+                    "Uzywamy modelu " + IMAGE_MODEL + ".",
             "prompt_used": prompt,
         }), 200
 
@@ -200,6 +192,7 @@ def generate_overlays():  # type: ignore[no-untyped-def]
         })
 
     return jsonify({
+        "success": True,
         "prompt_used": prompt,
         "variants": results,
     })
