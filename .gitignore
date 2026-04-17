@@ -29,3 +29,6 @@ Thumbs.db
 backend/storage/
 backend/db/reverse/
 reverse/
+recorder/assets/music/*.webm
+recorder/assets/music/*.mp3
+recorder/assets/music/*.m4a

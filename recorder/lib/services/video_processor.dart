@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'effect_templates.dart';
 import 'processing_config.dart';
 
 /// Post-processing nagrania przez FFmpeg.
@@ -227,49 +228,31 @@ class VideoProcessor extends ChangeNotifier {
     return args;
   }
 
-  /// Filter chain - boomerang + slow-mo tail.
+  /// Filter chain - routuje per-template.
   String _buildFilterComplex(
     ProcessingConfig config, {
     required bool hasOverlay,
     required Duration actualDuration,
   }) {
     final parts = <String>[];
-
-    // Split video do zmiennej [v0]
     parts.add('[0:v]format=yuv420p,fps=30[v0]');
 
+    final actualSec = actualDuration.inMilliseconds / 1000.0;
     String currentLabel;
 
-    if (config.boomerang) {
-      // Forward + Reverse concat.
-      parts.add('[v0]split=2[va][vb]');
-      parts.add('[va]null[fwd]');
-      parts.add('[vb]reverse[rev]');
-      parts.add('[fwd][rev]concat=n=2:v=1[bmr]');
-      currentLabel = '[bmr]';
-    } else {
-      currentLabel = '[v0]';
-    }
-
-    // Slow-mo na ogonie (uzywamy ACTUAL duration, nie declared).
-    final actualSec = actualDuration.inMilliseconds / 1000.0;
-    final totalDurSec = config.boomerang ? actualSec * 2 : actualSec;
-    final tailSec = config.slowMoTailSeconds;
-    final canDoSlowMo = config.slowMoTailFactor > 1.0 &&
-        tailSec > 0 &&
-        totalDurSec > tailSec + 0.5; // musi zostac >0.5s na firstpart
-
-    if (canDoSlowMo) {
-      final tailStart = totalDurSec - tailSec;
-      final factor = config.slowMoTailFactor;
-
-      parts.add('${currentLabel}split=2[bmrA][bmrB]');
-      parts.add(
-          '[bmrA]trim=0:${tailStart.toStringAsFixed(3)},setpts=PTS-STARTPTS[firstpart]');
-      parts.add(
-          '[bmrB]trim=${tailStart.toStringAsFixed(3)}:${totalDurSec.toStringAsFixed(3)},setpts=$factor*(PTS-STARTPTS)[slowtail]');
-      parts.add('[firstpart][slowtail]concat=n=2:v=1[slowed]');
-      currentLabel = '[slowed]';
+    switch (config.template) {
+      case EffectTemplate.classicBoomerang:
+        currentLabel = _classicBoomerang(parts, config, actualSec);
+        break;
+      case EffectTemplate.slowCinematic:
+        currentLabel = _slowCinematic(parts, config);
+        break;
+      case EffectTemplate.fastSlowFast:
+        currentLabel = _fastSlowFast(parts, config, actualSec);
+        break;
+      case EffectTemplate.freezeReverse:
+        currentLabel = _freezeReverse(parts, config, actualSec);
+        break;
     }
 
     // Overlay PNG (opcjonalnie)
@@ -292,6 +275,106 @@ class VideoProcessor extends ChangeNotifier {
 
     return parts.join(';');
   }
+}
+
+// --- Per-template filter builders -------------------------------------------
+
+/// Classic: forward + reverse + slow-mo tail.
+String _classicBoomerang(
+  List<String> parts,
+  ProcessingConfig config,
+  double inputSec,
+) {
+  parts.add('[v0]split=2[va][vb]');
+  parts.add('[va]null[fwd]');
+  parts.add('[vb]reverse[rev]');
+  parts.add('[fwd][rev]concat=n=2:v=1[bmr]');
+
+  final totalSec = inputSec * 2;
+  final tail = config.slowMoTailSeconds;
+  if (config.slowMoTailFactor > 1.0 && tail > 0 && totalSec > tail + 0.5) {
+    final start = totalSec - tail;
+    final f = config.slowMoTailFactor;
+    parts.add('[bmr]split=2[bmrA][bmrB]');
+    parts.add('[bmrA]trim=0:${start.toStringAsFixed(3)},'
+        'setpts=PTS-STARTPTS[firstpart]');
+    parts.add('[bmrB]trim=${start.toStringAsFixed(3)}:${totalSec.toStringAsFixed(3)},'
+        'setpts=$f*(PTS-STARTPTS)[slowtail]');
+    parts.add('[firstpart][slowtail]concat=n=2:v=1[out]');
+    return '[out]';
+  }
+  return '[bmr]';
+}
+
+/// Slow cinematic: caly film spowolniony, bez reverse.
+String _slowCinematic(List<String> parts, ProcessingConfig config) {
+  final f = config.slowMoTailFactor;
+  parts.add('[v0]setpts=$f*PTS[out]');
+  return '[out]';
+}
+
+/// Fast-slow-fast: szybki start -> normal -> slow tail.
+String _fastSlowFast(
+  List<String> parts,
+  ProcessingConfig config,
+  double inputSec,
+) {
+  // Podzial na 3 segmenty z roznym tempem.
+  final speedUp = config.speedUpFactor; // np. 1.5
+  final fastPart = (inputSec * 0.3).clamp(0.5, 3.0);
+  final tailPart = config.slowMoTailSeconds.clamp(0.5, inputSec * 0.4);
+  final midStart = fastPart;
+  final midEnd = inputSec - tailPart;
+
+  parts.add('[v0]split=3[vA][vB][vC]');
+  parts.add('[vA]trim=0:${fastPart.toStringAsFixed(3)},'
+      'setpts=(PTS-STARTPTS)/$speedUp[s1]');
+  parts.add('[vB]trim=${midStart.toStringAsFixed(3)}:${midEnd.toStringAsFixed(3)},'
+      'setpts=PTS-STARTPTS[s2]');
+  parts.add('[vC]trim=${midEnd.toStringAsFixed(3)}:${inputSec.toStringAsFixed(3)},'
+      'setpts=${config.slowMoTailFactor}*(PTS-STARTPTS)[s3]');
+  parts.add('[s1][s2][s3]concat=n=3:v=1[out]');
+  return '[out]';
+}
+
+/// Freeze + reverse: forward -> freeze N sec -> reverse -> slow tail.
+String _freezeReverse(
+  List<String> parts,
+  ProcessingConfig config,
+  double inputSec,
+) {
+  final freezeDur = config.freezeSeconds;
+  // Forward full, freeze from last frame, reverse full, optional slow tail.
+  parts.add('[v0]split=3[vA][vB][vC]');
+
+  // Full forward
+  parts.add('[vA]null[fwd]');
+
+  // Freeze from last frame: trim last 100ms + setpts to stretch
+  final lastMs = (inputSec - 0.1).clamp(0.0, inputSec);
+  parts.add('[vB]trim=${lastMs.toStringAsFixed(3)}:${inputSec.toStringAsFixed(3)},'
+      'setpts=${(freezeDur * 10).toStringAsFixed(1)}*(PTS-STARTPTS)[frz]');
+
+  // Reverse full
+  parts.add('[vC]reverse[rev]');
+
+  parts.add('[fwd][frz][rev]concat=n=3:v=1[bmr]');
+
+  // Opcjonalny slow tail
+  final totalSec = inputSec + freezeDur + inputSec;
+  final tail = config.slowMoTailSeconds;
+  if (config.slowMoTailFactor > 1.0 && tail > 0 && totalSec > tail + 0.5) {
+    final start = totalSec - tail;
+    final f = config.slowMoTailFactor;
+    parts.add('[bmr]split=2[bmrA][bmrB]');
+    parts.add('[bmrA]trim=0:${start.toStringAsFixed(3)},'
+        'setpts=PTS-STARTPTS[firstpart]');
+    parts.add('[bmrB]trim=${start.toStringAsFixed(3)}:${totalSec.toStringAsFixed(3)},'
+        'setpts=$f*(PTS-STARTPTS)[slowtail]');
+    parts.add('[firstpart][slowtail]concat=n=2:v=1[out]');
+    return '[out]';
+  }
+  return '[bmr]';
 }
 
 class VideoProcessingException implements Exception {

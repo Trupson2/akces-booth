@@ -10,6 +10,8 @@ import '../models/recording_mode.dart';
 import '../models/recording_resolution.dart';
 import '../services/camera_service.dart';
 import '../services/motor_controller.dart';
+import '../services/effect_templates.dart';
+import '../services/music_library.dart';
 import '../services/processing_config.dart';
 import '../services/station_client.dart';
 import '../services/video_processor.dart';
@@ -186,6 +188,8 @@ class _RecordingScreenState extends State<RecordingScreen>
     final motor = context.read<MotorController>();
     final client = context.read<StationClient>();
     final processor = context.read<VideoProcessor>();
+    // Zbieramy MusicLibrary przed await zeby nie uzywac context across async.
+    final musicLib = context.read<MusicLibrary>();
 
     final rawPath = await camera.stopRecording();
     await motor.stop();
@@ -193,11 +197,17 @@ class _RecordingScreenState extends State<RecordingScreen>
 
     if (rawPath == null) return;
 
-    // Post-processing: boomerang + slow-mo.
+    // Post-processing: losowy template + losowa muzyka.
     String finalPath = rawPath;
     try {
       client.sendProcessingProgress(0.0);
-      final config = ProcessingConfig.defaultBoomerang(_kMaxRecording);
+      final picker = RandomEffectPicker();
+      final params = picker.pick(musicPool: musicLib.availablePaths);
+      final config = ProcessingConfig.fromRandom(
+        params: params,
+        inputDuration: _kMaxRecording,
+      );
+      debugPrint('[RecordingScreen] Random effect: ${params.debugSignature}');
       finalPath = await processor.process(
         inputPath: rawPath,
         config: config,

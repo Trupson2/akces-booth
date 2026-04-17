@@ -1,12 +1,16 @@
+import 'effect_templates.dart';
+
 /// Konfiguracja post-processingu nagrania.
 ///
-/// Dla Sesji 6 MVP: boomerang (forward + reverse) + slow-mo na koncu.
-/// W kolejnych sesjach: muzyka, overlay PNG, drawtext.
+/// Od Sesji 6.5: per-nagranie losowany template + parametry przez
+/// [RandomEffectPicker]. [ProcessingConfig] ma info co wylosowane + assets.
 class ProcessingConfig {
   ProcessingConfig({
-    this.boomerang = true,
+    required this.template,
     this.slowMoTailFactor = 3.0,
     this.slowMoTailSeconds = 2.0,
+    this.speedUpFactor = 1.0,
+    this.freezeSeconds = 0.0,
     this.musicPath,
     this.overlayPath,
     this.textTop,
@@ -14,50 +18,88 @@ class ProcessingConfig {
     required this.inputDuration,
   });
 
-  /// True = forward + reverse. False = tylko forward.
-  final bool boomerang;
+  /// Wybrany wariant efektu.
+  final EffectTemplate template;
 
-  /// Slow-motion na ostatnie N sekund (np. 3.0 = 3x wolniej).
-  /// 1.0 = brak slow-mo.
+  /// Slow-mo faktor na ogonie (np. 3.0 = 3x wolniej). 1.0 = brak.
   final double slowMoTailFactor;
 
-  /// Dlugosc ogonu ktora jest slow-mo (przed slow-mo faktorem).
-  /// Dla 8s input + boomerang = 16s output; slowMoTailSeconds=2 oznacza
-  /// ze ostatnie 2s reverse (14-16s w output) staje sie slow-mo.
+  /// Dlugosc slow-mo tail (sekundy przed slow-mo faktorem).
   final double slowMoTailSeconds;
 
-  /// Opcjonalny MP3 tla.
+  /// Speed-up factor na pierwszych N sekundach (1.5 = 1.5x szybciej).
+  /// Uzywane w [EffectTemplate.fastSlowFast].
+  final double speedUpFactor;
+
+  /// Czas freeze frame (sekundy) - [EffectTemplate.freezeReverse].
+  final double freezeSeconds;
+
   final String? musicPath;
-
-  /// Opcjonalny PNG overlay (ramka 1080p/4K).
   final String? overlayPath;
-
-  /// Tekst u gory (np. "Wesele Ania & Tomek").
   final String? textTop;
-
-  /// Tekst u dolu (np. "15.04.2026").
   final String? textBottom;
 
-  /// Dlugosc raw nagrania.
   final Duration inputDuration;
 
-  /// Obliczona dlugosc wyjscia (dla progress bar).
+  /// Szacowana dlugosc outputu (dla progress bar).
   Duration get expectedOutputDuration {
-    var base = inputDuration.inMilliseconds;
-    if (boomerang) base *= 2;
-    // slow-mo wydluza ogon o (factor-1) * tailSec
-    final tailExtraMs =
-        ((slowMoTailFactor - 1.0) * slowMoTailSeconds * 1000).round();
-    return Duration(milliseconds: base + tailExtraMs);
+    final inMs = inputDuration.inMilliseconds;
+    final tailMs = (slowMoTailSeconds * 1000).round();
+    final extra = ((slowMoTailFactor - 1.0) * tailMs).round();
+    switch (template) {
+      case EffectTemplate.classicBoomerang:
+        return Duration(milliseconds: inMs * 2 + extra);
+      case EffectTemplate.slowCinematic:
+        return Duration(
+            milliseconds: (inMs * slowMoTailFactor).round());
+      case EffectTemplate.fastSlowFast:
+        return Duration(milliseconds: inMs + extra);
+      case EffectTemplate.freezeReverse:
+        return Duration(
+            milliseconds: inMs * 2 + (freezeSeconds * 1000).round() + extra);
+    }
   }
 
-  /// Default dla Sesji 6 - bez muzyki/overlay/tekstu, pelen boomerang 2x + 3x slow-mo na 2s.
-  factory ProcessingConfig.defaultBoomerang(Duration inputDuration) {
-    return ProcessingConfig(
-      boomerang: true,
-      slowMoTailFactor: 3.0,
-      slowMoTailSeconds: 2.0,
-      inputDuration: inputDuration,
-    );
+  /// Buduje config z wylosowanych parametrow.
+  factory ProcessingConfig.fromRandom({
+    required RandomizedParams params,
+    required Duration inputDuration,
+  }) {
+    switch (params.template) {
+      case EffectTemplate.classicBoomerang:
+        return ProcessingConfig(
+          template: params.template,
+          slowMoTailFactor: params.slowMoFactor,
+          slowMoTailSeconds: params.tailSeconds,
+          musicPath: params.musicPath,
+          inputDuration: inputDuration,
+        );
+      case EffectTemplate.slowCinematic:
+        return ProcessingConfig(
+          template: params.template,
+          slowMoTailFactor: params.slowMoFactor,
+          slowMoTailSeconds: inputDuration.inSeconds.toDouble(),
+          musicPath: params.musicPath,
+          inputDuration: inputDuration,
+        );
+      case EffectTemplate.fastSlowFast:
+        return ProcessingConfig(
+          template: params.template,
+          slowMoTailFactor: params.slowMoFactor,
+          slowMoTailSeconds: params.tailSeconds,
+          speedUpFactor: 1.5,
+          musicPath: params.musicPath,
+          inputDuration: inputDuration,
+        );
+      case EffectTemplate.freezeReverse:
+        return ProcessingConfig(
+          template: params.template,
+          slowMoTailFactor: params.slowMoFactor,
+          slowMoTailSeconds: params.tailSeconds,
+          freezeSeconds: 0.5,
+          musicPath: params.musicPath,
+          inputDuration: inputDuration,
+        );
+    }
   }
 }
