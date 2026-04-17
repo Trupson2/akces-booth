@@ -27,6 +27,9 @@ class _RecordingScreenState extends State<RecordingScreen>
   Timer? _uiTimer;
   late final AnimationController _pulse;
 
+  bool _lastFpsDegraded = false;
+  bool _lastResDegraded = false;
+
   @override
   void initState() {
     super.initState();
@@ -35,16 +38,51 @@ class _RecordingScreenState extends State<RecordingScreen>
       duration: const Duration(milliseconds: 900),
     )..repeat(reverse: true);
 
+    final camera = context.read<CameraService>();
+    _lastFpsDegraded = camera.highFpsDegraded;
+    _lastResDegraded = camera.resolutionDegraded;
+    camera.addListener(_onCameraChange);
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final camera = context.read<CameraService>();
       if (!camera.isInitialized && camera.status != CameraInitStatus.initializing) {
         await camera.initialize();
       }
     });
   }
 
+  void _onCameraChange() {
+    final camera = context.read<CameraService>();
+    if (camera.highFpsDegraded && !_lastFpsDegraded) {
+      _showDegradeSnack(
+        '${camera.mode.fps} fps nie wspierane - zapisujemy 30 fps. '
+        'TODO (sesja 6): prawdziwe slow-mo przez platform channel.',
+      );
+    }
+    if (camera.resolutionDegraded && !_lastResDegraded) {
+      _showDegradeSnack(
+        '${camera.resolution.label} nie wspierane - fallback na nizsza rozdzielczosc.',
+      );
+    }
+    _lastFpsDegraded = camera.highFpsDegraded;
+    _lastResDegraded = camera.resolutionDegraded;
+  }
+
+  void _showDegradeSnack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: Colors.amber.shade800,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+  }
+
   @override
   void dispose() {
+    context.read<CameraService>().removeListener(_onCameraChange);
     _autoStopTimer?.cancel();
     _uiTimer?.cancel();
     _pulse.dispose();

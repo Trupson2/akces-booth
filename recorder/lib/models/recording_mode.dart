@@ -4,6 +4,11 @@
 /// w CameraController, ale wsparcie dla wysokich klatek zalezy od urzadzenia.
 /// Jesli 120 fps nie jest dostepne, spadamy do normalnego trybu i oznaczamy
 /// degrade w UI.
+///
+/// TODO(sesja-6): Dla prawdziwego slow-mo 120/240 fps na SD8 Elite trzeba
+/// zrobic platform channel do CameraX + Camera2 API (`createConstrainedHighSpeedCaptureSession`).
+/// camera package 0.11.x nie wystawia high-speed session - szybka sciezka nie istnieje.
+/// Dzisiejszy fallback zapisuje 30fps i pokazuje warning ⚠️ w UI.
 enum RecordingMode {
   /// 30 fps - domyslny, szybka inicjalizacja, pewne dzialanie.
   normal,
