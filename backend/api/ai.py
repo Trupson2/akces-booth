@@ -166,11 +166,15 @@ def generate_overlays():  # type: ignore[no-untyped-def]
         images = _generate_images_imagen(prompt, count=count)
     except Exception as e:  # noqa: BLE001
         log.error("AI generation failed: %s", e)
+        # Zwracamy 200 z error w body - inaczej Cloudflare podmienia 502 na HTML.
         return jsonify({
+            "success": False,
             "error": "generation_failed",
             "message": str(e),
+            "hint": "Dodaj GEMINI_API_KEY do .env na serwerze i zrestartuj "
+                    "akces-booth.service. Klucz dostaniesz w aistudio.google.com.",
             "prompt_used": prompt,
-        }), 502
+        }), 200
 
     # Zapisz kazdy wariant do storage + DB.
     results = []

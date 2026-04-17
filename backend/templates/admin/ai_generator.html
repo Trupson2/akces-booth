@@ -91,9 +91,13 @@
       });
       const data = await r.json();
 
-      if (!r.ok) {
+      // Backend zwraca 200 nawet przy blędzie (zeby Cloudflare nie podmienial HTML).
+      if (!r.ok || data.success === false) {
         statusBox.className = 'mb-4 p-3 rounded bg-red-900/50 text-sm';
-        statusBox.textContent = 'Blad: ' + (data.message || data.error || r.status);
+        let msg = 'Blad: ' + (data.message || data.error || r.status);
+        if (data.hint) msg += '\n\n' + data.hint;
+        statusBox.textContent = msg;
+        statusBox.style.whiteSpace = 'pre-line';
         if (data.prompt_used) {
           promptBox.classList.remove('hidden');
           promptBox.textContent = 'Prompt (nie uzyty przez Imagen): ' + data.prompt_used;
