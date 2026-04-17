@@ -4,6 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../app.dart';
 import '../models/recording_mode.dart';
 import '../models/recording_resolution.dart';
 import '../services/camera_service.dart';
@@ -16,7 +17,11 @@ import 'preview_screen.dart';
 const Duration _kMaxRecording = Duration(seconds: 8);
 
 class RecordingScreen extends StatefulWidget {
-  const RecordingScreen({super.key});
+  const RecordingScreen({super.key, this.autoStart = false});
+
+  /// True gdy ekran zostal otwarty przez WS start ze Station -
+  /// od razu startujemy nagrywanie po inicjalizacji kamery.
+  final bool autoStart;
 
   @override
   State<RecordingScreen> createState() => _RecordingScreenState();
@@ -44,7 +49,8 @@ class _RecordingScreenState extends State<RecordingScreen>
     _lastResDegraded = camera.resolutionDegraded;
     camera.addListener(_onCameraChange);
 
-    // Sluchamy komend ze Station (auto-start/stop).
+    // Sluchamy komend ze Station (auto-start/stop). Nadpisujemy globalny
+    // handler z app.dart - ten zostanie przywrocony w dispose.
     final client = context.read<StationClient>();
     client.onStartRequested = () {
       if (!mounted) return;
@@ -60,8 +66,19 @@ class _RecordingScreenState extends State<RecordingScreen>
     };
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!camera.isInitialized && camera.status != CameraInitStatus.initializing) {
+      if (!camera.isInitialized &&
+          camera.status != CameraInitStatus.initializing) {
         await camera.initialize();
+      }
+      // autoStart: po initialize kamery automatycznie startujemy record.
+      if (widget.autoStart && mounted) {
+        // Maly delay zeby UI zdazyl sie odswiezyc i permissions wrocily.
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        if (!mounted) return;
+        final cam = context.read<CameraService>();
+        if (cam.isInitialized && !cam.isRecording) {
+          _toggleRecord();
+        }
       }
     });
   }
@@ -98,9 +115,12 @@ class _RecordingScreenState extends State<RecordingScreen>
 
   @override
   void dispose() {
-    final client = context.read<StationClient>();
-    client.onStartRequested = null;
-    client.onStopRequested = null;
+    // Przywracamy globalny handler w app.dart - od teraz start ze Station
+    // otworzy nowy RecordingScreen z autoStart zamiast krzyczec do zombie
+    // widgeta.
+    if (mounted) {
+      installGlobalStartHandler(context);
+    }
     context.read<CameraService>().removeListener(_onCameraChange);
     _autoStopTimer?.cancel();
     _uiTimer?.cancel();
