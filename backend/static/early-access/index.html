@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<base href="/early-access/">
 <title>Akces Booth · Polska fotobudka 360°</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -134,13 +135,6 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
-<script type="text/babel" src="frames/ios-frame.jsx"></script>
-<script type="text/babel" src="frames/android-frame.jsx"></script>
-<script type="text/babel" src="components/sections.jsx"></script>
-<script type="text/babel" src="components/flow.jsx"></script>
-<script type="text/babel" src="components/closing.jsx"></script>
-<script type="text/babel" src="components/faq.jsx"></script>
-
 <script>
   // Tweakable defaults — rewritten on disk by __edit_mode_set_keys
   window.TWEAKS = /*EDITMODE-BEGIN*/{
@@ -148,31 +142,13 @@
   }/*EDITMODE-END*/;
 </script>
 
-<script type="text/babel">
-  function App() {
-    const [tweaks, setTweaks] = React.useState(window.TWEAKS);
-
-    React.useEffect(() => {
-      window.__setTweaks = (patch) => setTweaks(t => ({ ...t, ...patch }));
-    }, []);
-
-    return (
-      <div>
-        <Hero variant={tweaks.heroVariant} socialCount={tweaks.socialCount} />
-        <ProblemSection />
-        <SolutionSection />
-        <FlowSection />
-        <PricingSection />
-        <FounderSection />
-        <FaqSection />
-        <SignupSection socialCount={tweaks.socialCount} />
-        <Footer />
-      </div>
-    );
-  }
-
-  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-</script>
+<script type="text/babel" src="frames/ios-frame.jsx"></script>
+<script type="text/babel" src="frames/android-frame.jsx"></script>
+<script type="text/babel" src="components/sections.jsx"></script>
+<script type="text/babel" src="components/flow.jsx"></script>
+<script type="text/babel" src="components/closing.jsx"></script>
+<script type="text/babel" src="components/faq.jsx"></script>
+<script type="text/babel" src="components/app.jsx"></script>
 
 <script>
   // Tweaks protocol

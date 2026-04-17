@@ -26,9 +26,13 @@ _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
 @early_access_bp.route("/early-access/")
-@early_access_bp.route("/early-access")
 def landing():  # type: ignore[no-untyped-def]
-    """Serwuj Landing Page.html z Claude Design (renamed index.html)."""
+    """Serwuj Landing Page.html z Claude Design (renamed index.html).
+
+    Werkzeug automatycznie robi 308 redirect z /early-access -> /early-access/,
+    co jest potrzebne zeby <base href> + relative JSX paths dzialaly,
+    i zeby anchor linki #problem / #faq scrollowaly zamiast robic pelny reload.
+    """
     target = LANDING_DIR / "index.html"
     if not target.exists():
         abort(404)
@@ -37,10 +41,17 @@ def landing():  # type: ignore[no-untyped-def]
 
 @early_access_bp.route("/early-access/<path:filename>")
 def landing_asset(filename: str):  # type: ignore[no-untyped-def]
-    """Serwuj assety (components/*.jsx, frames/*.jsx, scraps/*)."""
+    """Serwuj assety (components/*.jsx, frames/*.jsx, scraps/*).
+
+    Wazne: Flask domyslnie serwuje .jsx jako application/octet-stream, co
+    blokuje Babel Standalone transpile. Wymuszamy text/babel dla .jsx.
+    """
     if ".." in filename:
         abort(404)
-    return send_from_directory(str(LANDING_DIR), filename)
+    response = send_from_directory(str(LANDING_DIR), filename)
+    if filename.endswith(".jsx"):
+        response.headers["Content-Type"] = "text/babel; charset=utf-8"
+    return response
 
 
 @early_access_bp.route("/api/early-access/signup", methods=["POST"])
