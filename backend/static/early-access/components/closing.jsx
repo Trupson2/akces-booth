@@ -138,16 +138,16 @@ function FounderSection() {
                 backdropFilter: 'blur(8px)', borderRadius: 8,
                 fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
                 color: 'rgba(255,255,255,0.85)', letterSpacing: '0.05em',
-              }}>zdjęcie Adriana ↗</div>
+              }}>zdjęcie: dziadek + wnuk ↗</div>
             </div>
             <div style={{
               marginTop: 16, fontFamily: 'Inter, system-ui',
               fontSize: 14, fontWeight: 600, color: '#0F172A',
-            }}>Adrian · założyciel, deweloper, fotobudkarz</div>
+            }}>Andrzej Gauza · Adrian</div>
             <div style={{
               fontFamily: 'Inter, system-ui', fontSize: 13,
               color: '#64748B',
-            }}>Akces 360 · Mieszkowice</div>
+            }}>Akces · Mieszkowice · od 1999</div>
           </div>
 
           {/* story */}
@@ -158,11 +158,11 @@ function FounderSection() {
               fontWeight: 700, lineHeight: 1.15, letterSpacing: '-0.025em',
               margin: '20px 0 24px', color: '#0F172A', textWrap: 'balance',
             }}>
-              „Kupiłem fotobudkę, odpaliłem apkę i wiedziałem,
-              że muszę napisać <em style={{
+              „Dziadek prowadzi firmę <em style={{
                 fontFamily: 'Instrument Serif, serif', fontStyle: 'italic',
                 fontWeight: 400,
-              }}>lepszą.</em>”
+              }}>od 1999.</em>
+              Ja dokładam warstwę softu."
             </h2>
             <div style={{
               fontFamily: 'Inter, system-ui', fontSize: 16, lineHeight: 1.65,
@@ -170,25 +170,27 @@ function FounderSection() {
               display: 'flex', flexDirection: 'column', gap: 16,
             }}>
               <p style={{ margin: 0 }}>
-                Jestem Adrian. W październiku 2025 kupiłem sprzęt do fotobudek 360°
-                i zarejestrowałem Akces 360 — jednoosobowa działalność, Mieszkowice,
-                Zachodniopomorskie. Równolegle prowadzę Akces Hub, softwarowy projekt
-                do obsługi palet zwrotnych w handlu.
+                Akces to firma rodzinna. Mój dziadek, Andrzej, prowadzi
+                jednoosobową działalność w Mieszkowicach (Zachodniopomorskie)
+                nieprzerwanie od 14 czerwca 1999 roku. 27 lat handlu, relacji
+                z klientami i kompaktowej logistyki w małym mieście.
               </p>
               <p style={{ margin: 0 }}>
-                Apkę ChackTok testowałem pół roku zanim postanowiłem wziąć sprawy
-                w swoje ręce. Logo producenta na każdym filmie klienta. Support po
-                angielsku w strefie czasowej Los Angeles. Abonament w dolarach
-                z VAT-em. Pomyślałem, że musi być prostszy sposób — szczególnie
-                dla polskiego rynku.
+                W październiku 2025 dołożyliśmy do tego fotobudkę 360°.
+                Dziadek kupił sprzęt i ogarnia operacje, faktury, obsługę
+                klienta. Ja robię softwarową warstwę — apkę, backend, AI
+                ramki, muzykę. Rodzinny podział ról.
               </p>
               <p style={{ margin: 0 }}>
-                Buduję Akces Booth solo, z Claude Code jako partnerem do kodu.
-                Nie jestem startupem szukającym rynku. Jestem
-                dewelopero-fotobudkarzem, który robi narzędzie dla siebie —
-                a przy okazji udostępni je innym, którzy mają tę samą frustrację.
-                Pierwsze eventy robię osobiście w sezonie weselnym 2026. Early
-                access dla fotobudkarzy startuje tego samego lata.
+                Pierwsze apki do sterowania fotobudką, które przetestowaliśmy,
+                okazały się frustrujące: logo producenta na każdym filmie
+                klienta, support w innym kontynencie, abonament w dolarach.
+                Jako że mamy dostęp do własnego developera (do mnie),
+                uznaliśmy, że lepiej napisać własną. Akces Booth to nasze
+                narzędzie — które chcemy udostępnić innym polskim
+                fotobudkarzom, jeśli też mają tę frustrację. Pierwsze
+                eventy robimy latem 2026, early access dla innych rusza
+                wtedy samo.
               </p>
             </div>
           </div>
@@ -288,7 +290,10 @@ function Footer() {
             fontFamily: 'Instrument Serif, serif', fontSize: 14,
             color: '#fff', fontStyle: 'italic',
           }}>a</div>
-          <span>Akces Booth · projekt Akces 360 · Adrian (JDG) · Mieszkowice</span>
+          <span>
+            Akces Booth · marka <strong style={{color:'#cbd5e1'}}>Akces 360</strong> ·
+            Andrzej Gauza (JDG) · NIP 858-117-45-84 · Mieszkowice
+          </span>
         </div>
         <div style={{ display: 'flex', gap: 20 }}>
           <a href="mailto:adrian@akces360.pl" style={{ color: 'inherit', textDecoration: 'none' }}>Kontakt</a>

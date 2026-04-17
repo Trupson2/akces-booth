@@ -3,7 +3,7 @@
 
 {% block content %}
 <main class="max-w-3xl mx-auto px-6 py-16 text-slate-200">
-  <a href="/early-access" class="text-sm text-slate-400 hover:text-white">
+  <a href="/early-access/" class="text-sm text-slate-400 hover:text-white">
     ← wróć do landingu
   </a>
 
@@ -16,10 +16,21 @@
 
     <h2 class="text-xl font-bold text-white mt-8">1. Kto jest administratorem danych</h2>
     <p>
-      Administratorem Twoich danych osobowych jest
-      <strong>Adrian, prowadzący jednoosobową działalność gospodarczą
-      pod marką Akces 360</strong>, z siedzibą w Mieszkowicach.
-      Kontakt: <a href="mailto:adrian@akces360.pl" class="text-indigo-400">adrian@akces360.pl</a>.
+      Administratorem Twoich danych osobowych jest:
+    </p>
+    <div class="bg-slate-800 rounded-lg p-4 my-4 font-mono text-sm text-slate-200 leading-relaxed">
+      <strong class="text-white">Andrzej Gauza</strong><br>
+      prowadzący jednoosobową działalność gospodarczą pod firmą:<br>
+      <em>„Handel Art. Spoż.-Przem. Wyrobami Tytoniowymi AKCES Andrzej Gauza"</em><br>
+      (marka handlowa: <strong class="text-indigo-300">Akces 360</strong> / <strong class="text-indigo-300">Akces Booth</strong>)<br><br>
+      NIP: <strong>858-117-45-84</strong><br>
+      REGON: <strong>811847929</strong><br>
+      Adres: ul. Księcia Józefa Poniatowskiego 13, 74-505 Mieszkowice<br>
+      CEIDG: wpis aktywny od 14 czerwca 1999
+    </div>
+    <p>
+      Kontakt operacyjny (obsługiwany z upoważnienia administratora):
+      <a href="mailto:adrian@akces360.pl" class="text-indigo-400">adrian@akces360.pl</a>.
     </p>
 
     <h2 class="text-xl font-bold text-white mt-8">2. Jakie dane zbieramy</h2>
@@ -31,6 +42,7 @@
       <li>Twój <strong>adres e-mail</strong>,</li>
       <li>Informację o zaznaczonej zgodzie na otrzymywanie informacji o early access,</li>
       <li>Adres IP oraz nagłówek User-Agent Twojej przeglądarki (cel: ochrona przed spamem i nadużyciami),</li>
+      <li>Wariant komunikatu hero, który widziałeś w momencie zapisu (pomaga nam ocenić, która wersja strony działa lepiej),</li>
       <li>Znacznik czasowy zapisu.</li>
     </ul>
     <p>
@@ -38,67 +50,101 @@
       żadnych kategorii szczególnych danych osobowych.
     </p>
 
-    <h2 class="text-xl font-bold text-white mt-8">3. Po co</h2>
+    <h2 class="text-xl font-bold text-white mt-8">3. W jakim celu</h2>
     <ul class="list-disc pl-6 space-y-1">
       <li>Żeby napisać do Ciebie, kiedy Akces Booth będzie gotowy do testów,</li>
-      <li>Żeby zapytać Cię (raz, nie częściej) o opinie na etapie walidacji produktu,</li>
-      <li>Żeby ustalić cenę zamrożoną dla early birds.</li>
+      <li>Żeby zapytać Cię (raz, nie częściej) o opinię na etapie walidacji produktu,</li>
+      <li>Żeby ustalić cenę zamrożoną dla zapisanych jako pierwsi.</li>
     </ul>
     <p>
       Nie wysyłamy newslettera marketingowego, nie profilujemy, nie sprzedajemy
       listy osobom trzecim i nie udostępniamy jej zewnętrznym dostawcom poza
-      infrastrukturą hostingową opisaną niżej.
+      infrastrukturą hostingową opisaną w punkcie 5.
     </p>
 
     <h2 class="text-xl font-bold text-white mt-8">4. Podstawa prawna (RODO)</h2>
     <p>
-      Przetwarzanie odbywa się na podstawie <strong>Twojej zgody</strong>
-      (art. 6 ust. 1 lit. a RODO) wyrażonej w momencie zaznaczenia checkboxa.
-      Dane IP i User-Agent przetwarzamy na podstawie prawnie uzasadnionego
-      interesu administratora (art. 6 ust. 1 lit. f RODO) - ochrony formularza
-      przed spamem i automatami.
+      Przetwarzanie adresu e-mail odbywa się na podstawie <strong>Twojej zgody</strong>
+      wyrażonej w momencie zaznaczenia checkboxa i wysłania formularza
+      (art. 6 ust. 1 lit. a RODO).
+    </p>
+    <p>
+      Adres IP oraz User-Agent przetwarzamy na podstawie
+      <strong>prawnie uzasadnionego interesu administratora</strong>
+      (art. 6 ust. 1 lit. f RODO) — potrzeby ochrony formularza przed botami
+      i spamem.
     </p>
 
     <h2 class="text-xl font-bold text-white mt-8">5. Gdzie są przechowywane</h2>
     <p>
-      Na prywatnym serwerze Raspberry Pi zlokalizowanym w Polsce,
-      w bazie SQLite. Dostęp do danych ma wyłącznie administrator
+      Dane są przechowywane na prywatnym serwerze (Raspberry Pi)
+      zlokalizowanym fizycznie w Polsce, w bazie SQLite. Dostęp do danych
+      ma administrator oraz osoba upoważniona do kontaktu operacyjnego
       (Adrian). Połączenie do formularza jest szyfrowane HTTPS
-      (Cloudflare Tunnel).
+      (Cloudflare Tunnel). Nie korzystamy z zewnętrznych dostawców mailingu
+      typu Mailchimp ani z usług hostingowych poza Polską.
     </p>
 
     <h2 class="text-xl font-bold text-white mt-8">6. Jak długo</h2>
     <p>
-      Do momentu wycofania przez Ciebie zgody, albo do 24 miesięcy od
-      ostatniej interakcji - co nastąpi wcześniej. Potem kasujemy.
+      Do momentu wycofania przez Ciebie zgody albo do 24 miesięcy od
+      ostatniej interakcji — co nastąpi wcześniej. Potem wpis jest usuwany
+      automatycznie. Możesz w dowolnym momencie zażądać wcześniejszego
+      usunięcia (patrz punkt 7).
     </p>
 
-    <h2 class="text-xl font-bold text-white mt-8">7. Twoje prawa</h2>
-    <p>Masz prawo:</p>
+    <h2 class="text-xl font-bold text-white mt-8">7. Twoje prawa (RODO)</h2>
+    <p>Masz prawo do:</p>
     <ul class="list-disc pl-6 space-y-1">
-      <li>dostępu do swoich danych,</li>
-      <li>sprostowania,</li>
-      <li>usunięcia („prawo do bycia zapomnianym"),</li>
-      <li>wycofania zgody w dowolnym momencie (wystarczy mail),</li>
-      <li>wniesienia skargi do Prezesa Urzędu Ochrony Danych Osobowych
+      <li>dostępu do swoich danych (art. 15 RODO),</li>
+      <li>sprostowania danych (art. 16 RODO),</li>
+      <li>usunięcia danych — „prawo do bycia zapomnianym" (art. 17 RODO),</li>
+      <li>ograniczenia przetwarzania (art. 18 RODO),</li>
+      <li>przenoszenia danych (art. 20 RODO),</li>
+      <li>wycofania zgody w dowolnym momencie (art. 7 ust. 3 RODO),</li>
+      <li>wniesienia skargi do organu nadzorczego — Prezesa Urzędu Ochrony
+          Danych Osobowych
           (<a href="https://uodo.gov.pl" class="text-indigo-400" target="_blank">uodo.gov.pl</a>).</li>
     </ul>
-
-    <h2 class="text-xl font-bold text-white mt-8">8. Cookies</h2>
     <p>
-      Strona używa jednego ciasteczka technicznego w
-      <code>localStorage</code> - żeby pamiętać, że już zamknąłeś baner
-      zgody. Nie używamy cookies analitycznych (brak Google Analytics,
-      brak Meta Pixel), ani reklamowych. Czcionki ładujemy z Google Fonts
-      (CDN), które może zapisywać anonimowe dane technicznie niezbędne
-      do renderowania fontów.
+      Realizacja Twoich praw: wystarczy mail na
+      <a href="mailto:adrian@akces360.pl" class="text-indigo-400">adrian@akces360.pl</a>
+      z treścią „proszę o usunięcie/zmianę moich danych". W ciągu 7 dni
+      roboczych usuwamy/aktualizujemy wpis bez dodatkowych pytań.
     </p>
 
-    <h2 class="text-xl font-bold text-white mt-8">9. Chcesz żebyśmy Cię zapomnieli?</h2>
+    <h2 class="text-xl font-bold text-white mt-8">8. Cookies i śledzenie</h2>
+    <p>
+      Strona używa jednego ciasteczka technicznego w
+      <code>localStorage</code> przeglądarki — żeby pamiętać, że już
+      zamknąłeś banner zgody na cookies. Nie używamy cookies analitycznych
+      (brak Google Analytics, brak Meta Pixel, brak Hotjar) ani reklamowych.
+    </p>
+    <p>
+      Czcionki (Inter, Instrument Serif, JetBrains Mono) ładujemy z
+      Google Fonts. Google może zapisywać minimalne, anonimowe dane
+      techniczne niezbędne do renderowania fontów
+      (<a href="https://developers.google.com/fonts/faq/privacy"
+          class="text-indigo-400" target="_blank">polityka Google Fonts</a>).
+    </p>
+
+    <h2 class="text-xl font-bold text-white mt-8">9. Chcesz, żebyśmy Cię zapomnieli?</h2>
     <p>
       Napisz jedno zdanie na
-      <a href="mailto:adrian@akces360.pl" class="text-indigo-400">adrian@akces360.pl</a> -
-      w ciągu 7 dni usuwamy Twój wpis bez pytań.
+      <a href="mailto:adrian@akces360.pl" class="text-indigo-400">adrian@akces360.pl</a>.
+      W ciągu 7 dni roboczych usuwamy Twój wpis bez pytań i dosyłamy
+      potwierdzenie.
+    </p>
+
+    <hr class="border-slate-700 my-8">
+
+    <p class="text-xs text-slate-500">
+      Ta polityka opisuje faktyczny stan przetwarzania danych przez
+      administratora na dzień aktualizacji. Finalna wersja zostanie
+      zweryfikowana przez prawnika przed rozpoczęciem szerszej
+      komunikacji marketingowej (FB Ads, listy kontaktowe). Jeśli
+      zauważyłeś niezgodność lub masz pytanie — napisz, poprawiamy
+      szybko.
     </p>
 
   </section>
