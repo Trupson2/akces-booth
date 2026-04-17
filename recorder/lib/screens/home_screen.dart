@@ -34,22 +34,32 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: const [
-              _TopBar(),
-              SizedBox(height: 14),
-              _StatusColumn(),
-              SizedBox(height: 14),
-              _StartButton(),
-              SizedBox(height: 14),
-              _SpeedSection(),
-              SizedBox(height: 12),
-              _ReverseButton(),
-              SizedBox(height: 12),
-              Expanded(child: _DebugLogPanel()),
+            children: [
+              const _TopBar(),
+              const SizedBox(height: 14),
+              const _StatusColumn(),
+              const SizedBox(height: 14),
+              const _StartButton(),
+              const SizedBox(height: 14),
+              const _SpeedSection(),
+              const SizedBox(height: 12),
+              const _ReverseButton(),
+              const SizedBox(height: 12),
+              const Spacer(),
+              _DebugLogButton(onTap: () => _openDebugLog(context)),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  void _openDebugLog(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _DebugLogSheet(),
     );
   }
 }
@@ -321,29 +331,33 @@ class _ReverseButton extends StatelessWidget {
   }
 }
 
-class _DebugLogPanel extends StatelessWidget {
-  const _DebugLogPanel();
+class _DebugLogButton extends StatelessWidget {
+  const _DebugLogButton({required this.onTap});
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final motor = context.watch<MotorController>();
-    final log = motor.log;
+    final count = motor.log.length;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: const [
-              Icon(Icons.terminal_rounded, color: AppTheme.muted, size: 16),
-              SizedBox(width: 6),
-              Text(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.45),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.terminal_rounded,
+                  color: AppTheme.muted, size: 18),
+              const SizedBox(width: 10),
+              const Text(
                 'DEBUG LOG (MOCK BLE)',
                 style: TextStyle(
                   color: AppTheme.muted,
@@ -352,38 +366,127 @@ class _DebugLogPanel extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.greenAccent.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$count',
+                  style: const TextStyle(
+                    color: Colors.greenAccent,
+                    fontSize: 11,
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.keyboard_arrow_up_rounded,
+                  color: AppTheme.muted, size: 18),
             ],
           ),
-          const SizedBox(height: 6),
-          Expanded(
-            child: log.isEmpty
-                ? const Center(
-                    child: Text(
-                      'Brak komend.\nLaczenie z fotobudka...',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: AppTheme.muted, fontSize: 12),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: EdgeInsets.zero,
-                    itemCount: log.length,
-                    itemBuilder: (_, i) => Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
-                      child: Text(
-                        log[i],
-                        softWrap: true,
-                        style: const TextStyle(
-                          fontFamily: 'monospace',
-                          color: Colors.greenAccent,
-                          fontSize: 10,
-                          height: 1.3,
-                        ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DebugLogSheet extends StatelessWidget {
+  const _DebugLogSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.3,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // Grab handle
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                child: Row(
+                  children: [
+                    const Icon(Icons.terminal_rounded,
+                        color: AppTheme.muted, size: 18),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'DEBUG LOG (MOCK BLE)',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        letterSpacing: 2,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                  ),
+                    const Spacer(),
+                    IconButton(
+                      tooltip: 'Zamknij',
+                      icon: const Icon(Icons.close_rounded,
+                          color: AppTheme.muted),
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: Colors.white10),
+              Expanded(
+                child: Consumer<MotorController>(
+                  builder: (_, motor, child) {
+                    final log = motor.log;
+                    if (log.isEmpty) {
+                      return const Center(
+                        child: Text(
+                          'Brak komend.\nLaczenie z fotobudka...',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: AppTheme.muted, fontSize: 13),
+                        ),
+                      );
+                    }
+                    return ListView.builder(
+                      controller: scrollController,
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                      itemCount: log.length,
+                      itemBuilder: (_, i) => Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: SelectableText(
+                          log[i],
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            color: Colors.greenAccent,
+                            fontSize: 12,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
