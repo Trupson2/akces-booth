@@ -1,0 +1,17 @@
+.env
+venv/
+__pycache__/
+*.pyc
+db/*.db
+db/*.db-journal
+db/*.db-wal
+db/*.db-shm
+storage/videos/*
+storage/overlays/*
+storage/music/*
+!storage/videos/.gitkeep
+!storage/overlays/.gitkeep
+!storage/music/.gitkeep
+.vscode/
+.idea/
+*.log

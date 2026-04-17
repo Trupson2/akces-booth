@@ -1,0 +1,121 @@
+{% extends "admin/_layout.html" %}
+{% block title %}{% if event %}Edytuj event{% else %}Nowy event{% endif %}{% endblock %}
+
+{% block admin_content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-3xl font-black">
+    {% if event %}{{ event.name }}{% else %}Nowy event{% endif %}
+  </h1>
+  <a href="{{ url_for('admin.events_list') }}" class="text-slate-400 hover:underline">← Lista</a>
+</div>
+
+<form method="POST" class="bg-slate-800 rounded-xl p-6 space-y-4 max-w-2xl">
+  <div class="grid md:grid-cols-2 gap-4">
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Nazwa *</label>
+      <input name="name" required value="{{ event.name if event else '' }}"
+             class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+    </div>
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Typ eventu</label>
+      <select name="event_type" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+        {% set sel = event.event_type if event else '' %}
+        <option value="wedding"    {% if sel == 'wedding' %}selected{% endif %}>Wesele</option>
+        <option value="birthday"   {% if sel == 'birthday' %}selected{% endif %}>Urodziny</option>
+        <option value="corporate"  {% if sel == 'corporate' %}selected{% endif %}>Firmowy</option>
+        <option value="other"      {% if sel == 'other' %}selected{% endif %}>Inny</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Data</label>
+      <input type="date" name="event_date"
+             value="{{ event.event_date if event else '' }}"
+             class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+    </div>
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Klient (nazwa)</label>
+      <input name="client_name" value="{{ event.client_name if event else '' }}"
+             class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+    </div>
+    <div class="md:col-span-2">
+      <label class="block text-sm text-slate-400 mb-1">Kontakt klient</label>
+      <input name="client_contact" value="{{ event.client_contact if event else '' }}"
+             class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+    </div>
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Tekst gorny</label>
+      <input name="text_top" value="{{ event.text_top if event else '' }}"
+             placeholder="np. Wesele Ania & Tomek"
+             class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+    </div>
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Tekst dolny</label>
+      <input name="text_bottom" value="{{ event.text_bottom if event else '' }}"
+             placeholder="np. 15.04.2026"
+             class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+    </div>
+  </div>
+
+  {% if event %}
+    <div class="grid md:grid-cols-2 gap-4 pt-4 border-t border-slate-700">
+      <div>
+        <label class="block text-sm text-slate-400 mb-1">Ramka (overlay)</label>
+        <select name="overlay_id" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+          <option value="">(brak)</option>
+          {% for o in overlays %}
+            <option value="{{ o.id }}" {% if event.overlay_id == o.id %}selected{% endif %}>{{ o.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-400 mb-1">Muzyka</label>
+        <select name="music_id" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+          <option value="">(brak)</option>
+          {% for m in music %}
+            <option value="{{ m.id }}" {% if event.music_id == m.id %}selected{% endif %}>{{ m.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  {% endif %}
+
+  <label class="flex items-center gap-2 pt-2">
+    <input type="checkbox" name="activate"
+           {% if event and event.is_active %}checked{% endif %}>
+    <span>Ustaw jako aktywny event</span>
+  </label>
+
+  <div class="flex gap-3 pt-4">
+    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 px-6 py-3 rounded-lg font-bold">
+      {% if event %}Zapisz zmiany{% else %}Utworz event{% endif %}
+    </button>
+    {% if event and event.access_key %}
+      <a href="/e/{{ event.access_key }}"
+         target="_blank"
+         class="bg-slate-700 hover:bg-slate-600 px-6 py-3 rounded-lg">
+        Galeria eventu ↗
+      </a>
+    {% endif %}
+  </div>
+</form>
+
+{% if event and videos %}
+  <section class="mt-10 max-w-4xl">
+    <h2 class="text-xl font-bold mb-3">Filmy z eventu ({{ videos|length }})</h2>
+    <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+      {% for v in videos %}
+        <a href="/v/{{ v.short_id }}" target="_blank"
+           class="bg-slate-800 rounded-lg overflow-hidden hover:ring-2 ring-indigo-500">
+          <video class="w-full aspect-[9/16] object-cover bg-black" muted preload="metadata">
+            <source src="/api/videos/{{ v.short_id }}/stream#t=0.5" type="video/mp4">
+          </video>
+          <div class="p-2 text-xs">
+            <div class="font-mono text-indigo-300">{{ v.short_id }}</div>
+            <div class="text-slate-400">{{ v.view_count }} views · {{ v.download_count }} pobran</div>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+{% endblock %}

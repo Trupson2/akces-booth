@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Login - Akces Booth Admin{% endblock %}
+{% block content %}
+<div class="min-h-screen flex items-center justify-center bg-slate-900">
+  <form method="POST" class="bg-slate-800 p-8 rounded-2xl w-full max-w-sm space-y-4">
+    <div class="text-center mb-4">
+      <div class="text-4xl">📸</div>
+      <h1 class="text-xl font-bold mt-2">Akces Booth</h1>
+      <p class="text-sm text-slate-400">Admin Panel</p>
+    </div>
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Uzytkownik</label>
+      <input name="username" autocomplete="username"
+             class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2" required>
+    </div>
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Haslo</label>
+      <input type="password" name="password" autocomplete="current-password"
+             class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2" required>
+    </div>
+    <button type="submit"
+            class="w-full bg-indigo-600 hover:bg-indigo-700 font-bold py-3 rounded-lg">
+      Zaloguj
+    </button>
+  </form>
+</div>
+{% endblock %}

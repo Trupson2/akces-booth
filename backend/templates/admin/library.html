@@ -1,0 +1,115 @@
+{% extends "admin/_layout.html" %}
+{% block title %}Biblioteka{% endblock %}
+
+{% block admin_content %}
+<h1 class="text-3xl font-black mb-6">Biblioteka</h1>
+
+<div class="grid lg:grid-cols-2 gap-6">
+  <!-- OVERLAYS -->
+  <section class="bg-slate-800 rounded-xl p-5">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-bold text-lg">🖼 Ramki (overlays)</h2>
+      <div class="flex gap-2 text-sm">
+        <label class="bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded cursor-pointer">
+          + Upload
+          <input type="file" accept="image/png,image/jpeg,image/webp"
+                 class="hidden" onchange="uploadOverlay(this.files[0])">
+        </label>
+        <a href="{{ url_for('admin.ai_generator_page') }}"
+           class="bg-purple-600 hover:bg-purple-700 px-3 py-1.5 rounded">🤖 AI</a>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+      {% for o in overlays %}
+        <div class="bg-slate-900 rounded-lg overflow-hidden group relative">
+          <img src="/storage/{{ o.file_path.split('storage/')[-1] if 'storage/' in o.file_path else o.file_path }}"
+               class="w-full aspect-video object-contain bg-checker">
+          <div class="p-2">
+            <div class="text-xs font-semibold truncate">{{ o.name }}</div>
+            <div class="text-[10px] text-slate-400">{{ o.source }}</div>
+          </div>
+          <button onclick="deleteOverlay({{ o.id }})"
+                  class="absolute top-1 right-1 bg-red-600 text-xs px-2 py-0.5 rounded
+                         opacity-0 group-hover:opacity-100 transition">
+            ✕
+          </button>
+        </div>
+      {% else %}
+        <div class="col-span-3 text-center text-slate-400 py-8">
+          Brak ramek. Upload PNG albo wygeneruj AI.
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- MUSIC -->
+  <section class="bg-slate-800 rounded-xl p-5">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-bold text-lg">🎵 Muzyka</h2>
+      <label class="bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded cursor-pointer text-sm">
+        + Upload MP3
+        <input type="file" accept="audio/*" class="hidden" onchange="uploadMusic(this.files[0])">
+      </label>
+    </div>
+    <ul class="divide-y divide-slate-700">
+      {% for m in music %}
+        <li class="py-2 flex items-center gap-3">
+          <audio controls preload="none"
+                 src="/storage/{{ m.file_path.split('storage/')[-1] if 'storage/' in m.file_path else m.file_path }}"
+                 class="h-8"></audio>
+          <div class="flex-1 text-sm">
+            <div class="font-semibold">{{ m.name }}</div>
+            <div class="text-xs text-slate-400">{{ m.source }}</div>
+          </div>
+          <button onclick="deleteMusic({{ m.id }})"
+                  class="text-red-400 hover:text-red-300 text-sm">Usun</button>
+        </li>
+      {% else %}
+        <li class="py-8 text-center text-slate-400">Brak utworow.</li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  async function uploadOverlay(file) {
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('name', file.name);
+    const r = await fetch('/api/library/overlays', { method: 'POST', body: fd });
+    if (r.ok) location.reload(); else alert('Blad uploadu');
+  }
+  async function deleteOverlay(id) {
+    if (!confirm('Usunac?')) return;
+    const r = await fetch('/api/library/overlays/' + id, { method: 'DELETE' });
+    if (r.ok) location.reload();
+  }
+  async function uploadMusic(file) {
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('name', file.name);
+    const r = await fetch('/api/library/music', { method: 'POST', body: fd });
+    if (r.ok) location.reload(); else alert('Blad uploadu');
+  }
+  async function deleteMusic(id) {
+    if (!confirm('Usunac?')) return;
+    const r = await fetch('/api/library/music/' + id, { method: 'DELETE' });
+    if (r.ok) location.reload();
+  }
+</script>
+<style>
+  .bg-checker {
+    background-image:
+      linear-gradient(45deg, #334155 25%, transparent 25%),
+      linear-gradient(-45deg, #334155 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #334155 75%),
+      linear-gradient(-45deg, transparent 75%, #334155 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  }
+</style>
+{% endblock %}

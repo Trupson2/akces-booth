@@ -1,0 +1,22 @@
+[Unit]
+Description=Akces Booth Flask Backend
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/akces-booth/backend
+Environment="PATH=/home/pi/akces-booth/backend/venv/bin"
+ExecStart=/home/pi/akces-booth/backend/venv/bin/gunicorn \
+  --workers 4 \
+  --bind 0.0.0.0:5100 \
+  --timeout 120 \
+  --access-logfile - \
+  --error-logfile - \
+  app:app
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,57 @@
+{% extends "admin/_layout.html" %}
+{% block title %}Eventy{% endblock %}
+
+{% block admin_content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-3xl font-black">Eventy</h1>
+  <a href="{{ url_for('admin.event_new') }}"
+     class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg font-bold">
+    + Nowy event
+  </a>
+</div>
+
+<div class="bg-slate-800 rounded-xl overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-700/50 text-slate-300 text-left">
+      <tr>
+        <th class="p-3">Nazwa</th>
+        <th class="p-3">Typ</th>
+        <th class="p-3">Data</th>
+        <th class="p-3">Filmow</th>
+        <th class="p-3">Aktywny</th>
+        <th class="p-3"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-700">
+      {% for e in events %}
+        <tr class="hover:bg-slate-700/30">
+          <td class="p-3 font-semibold">{{ e.name }}</td>
+          <td class="p-3 text-slate-400">{{ e.event_type or "-" }}</td>
+          <td class="p-3 text-slate-400">{{ e.event_date or "-" }}</td>
+          <td class="p-3 text-indigo-300">{{ e.video_count }}</td>
+          <td class="p-3">
+            {% if e.is_active %}
+              <span class="bg-emerald-600 px-2 py-0.5 rounded text-xs font-bold">AKTYWNY</span>
+            {% else %}
+              <form method="POST" action="{{ url_for('admin.event_activate', event_id=e.id) }}" class="inline">
+                <button class="text-xs text-indigo-400 hover:underline">Aktywuj</button>
+              </form>
+            {% endif %}
+          </td>
+          <td class="p-3 text-right space-x-2">
+            <a href="{{ url_for('admin.event_edit', event_id=e.id) }}"
+               class="text-indigo-400 hover:underline">Edytuj</a>
+            <form method="POST" action="{{ url_for('admin.event_delete', event_id=e.id) }}"
+                  class="inline"
+                  onsubmit="return confirm('Skasowac event i wszystkie filmy?')">
+              <button class="text-red-400 hover:underline">Usun</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="p-8 text-center text-slate-400">Brak eventow. Stworz pierwszy!</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

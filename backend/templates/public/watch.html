@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Twoj film - {{ event.name if event else "Akces Booth" }}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-purple-900 via-slate-900 to-black">
+  <div class="max-w-2xl mx-auto px-4 py-6">
+    <div class="text-center mb-6">
+      <h1 class="text-3xl font-black">🎉 Twoj film jest gotowy!</h1>
+      {% if event %}
+        <p class="text-lg text-purple-200 mt-1">{{ event.name }}</p>
+      {% endif %}
+    </div>
+
+    <div class="bg-black rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10">
+      <video controls autoplay loop playsinline class="w-full max-h-[60vh] object-contain bg-black">
+        <source src="/api/videos/{{ video.short_id }}/stream" type="video/mp4">
+        Twoja przegladarka nie obsluguje video HTML5.
+      </video>
+    </div>
+
+    <div class="mt-6 flex flex-col gap-3">
+      <a href="/api/videos/{{ video.short_id }}/download"
+         class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold
+                py-4 rounded-xl text-center text-lg transition">
+        ⬇ Pobierz film
+      </a>
+
+      <div class="grid grid-cols-3 gap-2">
+        <button onclick="shareTo('whatsapp')"
+                class="bg-green-600 hover:bg-green-700 py-3 rounded-xl font-semibold transition">
+          WhatsApp
+        </button>
+        <button onclick="shareTo('copy')"
+                class="bg-slate-700 hover:bg-slate-600 py-3 rounded-xl font-semibold transition">
+          Kopiuj link
+        </button>
+        <button onclick="shareTo('native')"
+                class="bg-purple-600 hover:bg-purple-700 py-3 rounded-xl font-semibold transition">
+          Udostepnij
+        </button>
+      </div>
+    </div>
+
+    <div class="mt-12 text-center border-t border-white/10 pt-8">
+      <p class="text-purple-200">Podobala Ci sie fotobudka?</p>
+      <p class="font-bold text-xl mt-2">Zamow Akces 360 na swoj event!</p>
+      <a href="https://akces360.pl"
+         class="bg-white text-black px-6 py-3 rounded-lg mt-3 inline-block
+                font-bold hover:bg-slate-100 transition">
+        akces360.pl
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const pageUrl = "{{ public_base }}/v/{{ video.short_id }}";
+  function shareTo(target) {
+    if (target === 'whatsapp') {
+      window.open(`https://wa.me/?text=${encodeURIComponent(pageUrl)}`, '_blank');
+    } else if (target === 'copy') {
+      navigator.clipboard?.writeText(pageUrl).then(() => alert('Skopiowano!'));
+    } else if (target === 'native') {
+      if (navigator.share) {
+        navigator.share({ url: pageUrl, title: 'Moj film z fotobudki' });
+      } else {
+        alert('Udostepnianie nieobslugiwane - uzyj "Kopiuj link".');
+      }
+    }
+  }
+</script>
+{% endblock %}

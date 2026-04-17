@@ -1,0 +1,130 @@
+{% extends "admin/_layout.html" %}
+{% block title %}AI Generator Ramek{% endblock %}
+
+{% block admin_content %}
+<h1 class="text-3xl font-black mb-2">🤖 AI Generator Ramek</h1>
+<p class="text-slate-400 mb-6">
+  Wygeneruj 3 warianty ramek (overlay) dla eventu.
+  Uzywa Gemini do prompta + Imagen 3 do generacji.
+</p>
+
+<div class="grid lg:grid-cols-2 gap-6">
+  <form id="ai-form" class="bg-slate-800 rounded-xl p-5 space-y-4">
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Typ eventu</label>
+      <select name="event_type" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+        <option value="wedding">Wesele</option>
+        <option value="birthday">Urodziny</option>
+        <option value="corporate">Firmowy</option>
+        <option value="other">Inny</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Styl</label>
+      <select name="style" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+        <option value="classic">Klasyczny (biel + zlota)</option>
+        <option value="boho">Boho (pastele)</option>
+        <option value="rustic">Rustykalny (drewno, polne kwiaty)</option>
+        <option value="modern">Nowoczesny (minimalistyczny)</option>
+        <option value="glamour">Glamour (czarny + zloty)</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Motyw (opcjonalnie)</label>
+      <input name="theme" placeholder="np. lawenda, polne kwiaty, marmur"
+             class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+    </div>
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Imiona / firma *</label>
+      <input name="names" required placeholder="Ania & Tomek"
+             class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+    </div>
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Data</label>
+      <input type="date" name="date"
+             class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+    </div>
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Liczba wariantow</label>
+      <input type="number" name="count" value="3" min="1" max="4"
+             class="w-24 bg-slate-900 border border-slate-700 rounded px-3 py-2">
+    </div>
+    <button type="submit"
+            class="w-full bg-purple-600 hover:bg-purple-700 font-bold py-3 rounded-lg">
+      🤖 Wygeneruj warianty
+    </button>
+  </form>
+
+  <div>
+    <h2 class="text-sm uppercase tracking-wider text-slate-400 mb-3">Wyniki</h2>
+    <div id="status" class="hidden mb-4 p-3 rounded bg-slate-800 text-sm"></div>
+    <div id="prompt-used" class="hidden mb-3 p-3 bg-slate-800/50 rounded text-xs text-slate-400 font-mono"></div>
+    <div id="variants" class="grid grid-cols-1 gap-3"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const form = document.getElementById('ai-form');
+  const statusBox = document.getElementById('status');
+  const promptBox = document.getElementById('prompt-used');
+  const variants = document.getElementById('variants');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = Object.fromEntries(new FormData(form).entries());
+    statusBox.className = 'mb-4 p-3 rounded bg-slate-800 text-sm';
+    statusBox.textContent = 'Generowanie... moze chwile zajac (Imagen 3 API).';
+    variants.innerHTML = '';
+    promptBox.classList.add('hidden');
+
+    const btn = form.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.textContent = '⏳ Generowanie...';
+
+    try {
+      const r = await fetch('/api/ai/generate-overlays', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+
+      if (!r.ok) {
+        statusBox.className = 'mb-4 p-3 rounded bg-red-900/50 text-sm';
+        statusBox.textContent = 'Blad: ' + (data.message || data.error || r.status);
+        if (data.prompt_used) {
+          promptBox.classList.remove('hidden');
+          promptBox.textContent = 'Prompt (nie uzyty przez Imagen): ' + data.prompt_used;
+        }
+        return;
+      }
+
+      statusBox.className = 'mb-4 p-3 rounded bg-emerald-900/50 text-sm';
+      statusBox.textContent = `Gotowe! ${data.variants.length} wariantow.`;
+      promptBox.classList.remove('hidden');
+      promptBox.textContent = 'Prompt: ' + (data.prompt_used || '');
+
+      data.variants.forEach(v => {
+        const card = document.createElement('div');
+        card.className = 'bg-slate-800 rounded-xl overflow-hidden';
+        card.innerHTML = `
+          <img src="${v.url}" class="w-full aspect-video object-contain bg-black">
+          <div class="p-3 flex items-center justify-between text-sm">
+            <div class="font-semibold">${v.name}</div>
+            <a class="text-indigo-400 hover:underline" href="/admin/library">Biblioteka →</a>
+          </div>
+        `;
+        variants.appendChild(card);
+      });
+    } catch (err) {
+      statusBox.className = 'mb-4 p-3 rounded bg-red-900/50 text-sm';
+      statusBox.textContent = 'Blad sieci: ' + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🤖 Wygeneruj warianty';
+    }
+  });
+</script>
+{% endblock %}

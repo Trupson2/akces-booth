@@ -1,0 +1,19 @@
+/* Akces Booth custom styles. Tailwind CDN pokrywa wieksza czesc.
+   Tutaj tylko rzeczy ktorych nie mozna zrobic utility-first. */
+
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Video player - lekki look */
+video {
+  background: #000;
+}
+
+/* Admin panel - scrollbar */
+main::-webkit-scrollbar { width: 8px; }
+main::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}

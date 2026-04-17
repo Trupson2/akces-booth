@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Galeria - {{ event.name }}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-indigo-900 via-slate-900 to-black">
+  <div class="max-w-5xl mx-auto px-4 py-10">
+    <header class="mb-8 text-center">
+      <h1 class="text-4xl font-black">{{ event.name }}</h1>
+      {% if event.event_date %}
+        <p class="text-slate-400 mt-1">{{ event.event_date }}</p>
+      {% endif %}
+      <p class="mt-4 text-slate-300">{{ videos|length }} filmow z eventu</p>
+    </header>
+
+    {% if not videos %}
+      <div class="text-center text-slate-400 py-20">
+        <p>Jeszcze nie ma filmow. Wroc za chwile!</p>
+      </div>
+    {% else %}
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for v in videos %}
+          <a href="/v/{{ v.short_id }}"
+             class="block bg-slate-800 rounded-xl overflow-hidden hover:ring-2 ring-indigo-500 transition">
+            <div class="aspect-[9/16] bg-black relative">
+              <video class="w-full h-full object-cover" muted preload="metadata">
+                <source src="/api/videos/{{ v.short_id }}/stream#t=0.5" type="video/mp4">
+              </video>
+              <div class="absolute inset-0 flex items-center justify-center
+                          bg-black/20 text-5xl opacity-70">▶</div>
+            </div>
+            <div class="p-3 text-sm">
+              <div class="font-mono text-indigo-300">{{ v.short_id }}</div>
+              <div class="text-slate-400 text-xs">
+                {{ v.view_count }} wyswietlen · {{ v.download_count }} pobran
+              </div>
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
