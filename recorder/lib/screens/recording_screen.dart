@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -9,7 +10,9 @@ import '../models/recording_mode.dart';
 import '../models/recording_resolution.dart';
 import '../services/camera_service.dart';
 import '../services/motor_controller.dart';
+import '../services/processing_config.dart';
 import '../services/station_client.dart';
+import '../services/video_processor.dart';
 import '../theme/app_theme.dart';
 import 'preview_screen.dart';
 
@@ -182,23 +185,47 @@ class _RecordingScreenState extends State<RecordingScreen>
     final camera = context.read<CameraService>();
     final motor = context.read<MotorController>();
     final client = context.read<StationClient>();
+    final processor = context.read<VideoProcessor>();
 
-    final path = await camera.stopRecording();
+    final rawPath = await camera.stopRecording();
     await motor.stop();
     client.sendRecordingStopped();
 
-    if (path == null) return;
+    if (rawPath == null) return;
 
-    // Real mode: jesli Station online, wysylamy plik (z upload progress jako
-    // processing_progress). Potem wracamy do Home (Station pokaze preview).
+    // Post-processing: boomerang + slow-mo.
+    String finalPath = rawPath;
+    try {
+      client.sendProcessingProgress(0.0);
+      final config = ProcessingConfig.defaultBoomerang(_kMaxRecording);
+      finalPath = await processor.process(
+        inputPath: rawPath,
+        config: config,
+        onProgress: (p, _) => client.sendProcessingProgress(p),
+      );
+      // Sprzataj raw (mamy boomerang).
+      try {
+        await File(rawPath).delete();
+      } catch (_) {}
+    } on VideoProcessingException catch (e) {
+      debugPrint('Boomerang fail: $e - wysylam raw');
+      // Fallback - uzywamy raw jak processing padnie.
+      finalPath = rawPath;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Efekty fail: ${e.message.split("\n").first}'),
+            backgroundColor: Colors.amber.shade800,
+          ),
+        );
+      }
+    }
+    client.sendProcessingDone();
+
+    // Real mode: jesli Station online, wysylamy plik. Potem wracamy do Home.
     // Mock mode / no Station: idziemy do lokalnego PreviewScreen.
     if (client.isConnected) {
-      // Na razie bez FFmpeg - od razu upload.
-      // Raportujemy pseudo "processing_done" zeby Station przeszla do transfer.
-      client.sendProcessingProgress(0.0);
-      client.sendProcessingDone();
-
-      final ok = await client.uploadVideo(path);
+      final ok = await client.uploadVideo(finalPath);
       if (!mounted) return;
       if (ok) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -211,7 +238,7 @@ class _RecordingScreenState extends State<RecordingScreen>
         // Upload fail - pokaz lokalnie zeby uratowac film.
         await Navigator.of(context).pushReplacement(
           MaterialPageRoute<void>(
-            builder: (_) => PreviewScreen(videoPath: path),
+            builder: (_) => PreviewScreen(videoPath: finalPath),
           ),
         );
       }
@@ -219,7 +246,7 @@ class _RecordingScreenState extends State<RecordingScreen>
       if (!mounted) return;
       await Navigator.of(context).pushReplacement(
         MaterialPageRoute<void>(
-          builder: (_) => PreviewScreen(videoPath: path),
+          builder: (_) => PreviewScreen(videoPath: finalPath),
         ),
       );
     }

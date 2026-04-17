@@ -23,6 +23,8 @@ dependencies:
   path: ^1.9.0
   # BLE motor (YCKJNB / 360 Controller)
   flutter_blue_plus: ^1.32.0
+  # FFmpeg post-processing (boomerang + slow-mo)
+  ffmpeg_kit_flutter_new: ^4.1.0
 
 dev_dependencies:
   flutter_test:
