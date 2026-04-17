@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../models/recording_mode.dart';
 import '../models/recording_resolution.dart';
+import 'settings_store.dart';
 
 /// Stan inicjalizacji serwisu kamery.
 enum CameraInitStatus {
@@ -22,6 +23,10 @@ enum CameraInitStatus {
 
 /// Serwis zarzadzajacy CameraController, recordingiem i trybem FPS.
 class CameraService extends ChangeNotifier {
+  CameraService({SettingsStore? store}) : _store = store ?? SettingsStore();
+
+  final SettingsStore _store;
+
   CameraController? _controller;
   List<CameraDescription> _cameras = const [];
   CameraDescription? _backCamera;
@@ -83,6 +88,10 @@ class CameraService extends ChangeNotifier {
     _set(CameraInitStatus.initializing);
 
     try {
+      // Zaladuj ostatnio wybrane ustawienia przed stworzeniem controllera.
+      _mode = await _store.loadMode();
+      _resolution = await _store.loadResolution();
+
       _cameras = await availableCameras();
       if (_cameras.isEmpty) {
         _set(CameraInitStatus.error, error: 'Nie znaleziono zadnej kamery');
@@ -188,6 +197,7 @@ class CameraService extends ChangeNotifier {
       return;
     }
     _mode = mode;
+    await _store.saveMode(mode);
     _set(CameraInitStatus.initializing);
     try {
       await _createController(mode, _resolution);
@@ -205,6 +215,7 @@ class CameraService extends ChangeNotifier {
       return;
     }
     _resolution = resolution;
+    await _store.saveResolution(resolution);
     _set(CameraInitStatus.initializing);
     try {
       await _createController(_mode, resolution);
