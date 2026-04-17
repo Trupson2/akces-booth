@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../services/app_state_machine.dart';
+import '../services/local_server.dart';
 import '../services/mock_services.dart';
 import '../theme/app_theme.dart';
 import 'bt_setup_screen.dart';
@@ -15,6 +17,7 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final conn = context.watch<ConnectivityStatus>();
     final sm = context.watch<AppStateMachine>();
+    final server = context.watch<LocalServer>();
 
     return Scaffold(
       appBar: AppBar(
@@ -43,6 +46,12 @@ class SettingsScreen extends StatelessWidget {
               _Row('Slow-motion', '2x (post-process)'),
               _Row('Predkosc obrotu', '7/10'),
               _Row('Kierunek', 'Zmienny'),
+            ],
+          ),
+          _Section(
+            title: '📡 ADRES STATION (dla Recorder)',
+            children: [
+              _ServerInfoRow(server: server),
             ],
           ),
           _Section(
@@ -157,6 +166,119 @@ class _Row extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ServerInfoRow extends StatelessWidget {
+  const _ServerInfoRow({required this.server});
+  final LocalServer server;
+
+  @override
+  Widget build(BuildContext context) {
+    final ip = server.localIp ?? '?';
+    final running = server.isRunning;
+    final connected = server.isRecorderConnected;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(
+              running ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
+              color: running ? AppTheme.success : AppTheme.error,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    running ? 'Serwer dziala' : 'Serwer wylaczony',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    connected
+                        ? 'Recorder polaczony'
+                        : 'Recorder nie jest polaczony',
+                    style: TextStyle(
+                      color: connected ? AppTheme.success : AppTheme.muted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _CopyableValue(label: 'IP', value: ip),
+        const SizedBox(height: 6),
+        _CopyableValue(label: 'Port', value: '${server.port}'),
+        const SizedBox(height: 6),
+        _CopyableValue(label: 'WebSocket', value: server.webSocketUrl),
+        const SizedBox(height: 10),
+        Text(
+          'W Recorder -> Ustawienia polacz -> wpisz IP: $ip (port ${server.port}).',
+          style: const TextStyle(color: AppTheme.muted, fontSize: 12),
+        ),
+      ],
+    );
+  }
+}
+
+class _CopyableValue extends StatelessWidget {
+  const _CopyableValue({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 80,
+          child: Text(label,
+              style: const TextStyle(color: AppTheme.muted, fontSize: 12)),
+        ),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppTheme.background,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: SelectableText(
+              value,
+              style: const TextStyle(
+                color: AppTheme.accent,
+                fontSize: 13,
+                fontFamily: 'monospace',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton(
+          tooltip: 'Skopiuj',
+          icon: const Icon(Icons.copy_rounded, size: 18, color: AppTheme.muted),
+          onPressed: () {
+            Clipboard.setData(ClipboardData(text: value));
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(SnackBar(
+                content: Text('Skopiowano: $value'),
+                duration: const Duration(seconds: 2),
+              ));
+          },
+        ),
+      ],
     );
   }
 }

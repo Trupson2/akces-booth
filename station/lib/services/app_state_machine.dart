@@ -4,34 +4,39 @@ import 'package:flutter/foundation.dart';
 
 import '../models/app_state.dart';
 import '../models/video_job.dart';
+import 'local_server.dart';
+import 'wire_protocol.dart';
 
 /// Centralny state controller - decyduje ktory ekran jest wyswietlany.
 ///
-/// W Sesji 3 wszystkie przejscia sa zmockowane przez Timery. W Sesji 4+
-/// podepniemy prawdziwe zdarzenia (start z Recorder przez WiFi, FFmpeg
-/// progress z OnePlus, transfer finish, upload do RPi).
+/// Sesja 3: wszystkie przejscia zmockowane timery.
+/// Sesja 4: real WebSocket do Recorder. Mock timery zostaja jako FALLBACK
+/// gdy Recorder nie jest polaczony (dev na jednym urzadzeniu, demo).
+///
+/// Jesli `server.isRecorderConnected == true`:
+///   - startRecording() wysyla 'start_recording' do Recorder
+///   - Progress/state leci z WS, mock timery wylaczone
+/// W przeciwnym razie: stary flow mockowy.
 ///
 /// UWAGA dla Sesji 6 (FFmpeg post-processing): NIE dodawac logo overlayu
 /// "Akces 360" na finalnym filmie - decyzja Adriana 17.04.2026.
-/// Tekst "Logo Akces 360" zostal usuniety z ProcessingScreen steps.
 class AppStateMachine extends ChangeNotifier {
-  AppStateMachine();
+  AppStateMachine({this.server});
+
+  /// Ustawiany przez main.dart po starcie serwera.
+  final LocalServer? server;
 
   AppState _state = AppState.idle;
   VideoJob? _currentJob;
   double _progress = 0.0;
-
-  /// Licznik filmow ukonczonych na evencie.
   int _videoCount = 0;
-
-  /// Countdown na QR screen.
   int _qrCountdownSeconds = 0;
 
   Timer? _autoAdvance;
   Timer? _progressTicker;
   Timer? _countdownTicker;
+  Timer? _timeoutGuard;
 
-  // Mock durations (configurable dla Sesji 3).
   static const Duration recordingDuration = Duration(seconds: 8);
   static const Duration processingDuration = Duration(seconds: 10);
   static const Duration transferDuration = Duration(seconds: 5);
@@ -39,13 +44,18 @@ class AppStateMachine extends ChangeNotifier {
   static const Duration qrDisplayDuration = Duration(seconds: 60);
   static const Duration thankYouDuration = Duration(seconds: 3);
 
+  /// Maksymalny czas na cykl Recording->Preview (bezpiecznik na zawieszenie).
+  static const Duration recorderTimeout = Duration(seconds: 60);
+
   AppState get state => _state;
   VideoJob? get currentJob => _currentJob;
   double get progress => _progress.clamp(0.0, 1.0);
   int get videoCount => _videoCount;
   int get qrCountdownSeconds => _qrCountdownSeconds;
 
-  /// Ile sekund zostalo dla biezacego stanu z progress barem.
+  /// True jesli mamy zywe polaczenie z Recorder. Inaczej -> mock mode.
+  bool get isRealMode => server?.isRecorderConnected ?? false;
+
   Duration get currentStateDuration {
     switch (_state) {
       case AppState.recording:
@@ -61,6 +71,58 @@ class AppStateMachine extends ChangeNotifier {
     }
   }
 
+  /// Wire callbacks z LocalServer -> state machine. Wywolywane raz z main.
+  void attachServer() {
+    final s = server;
+    if (s == null) return;
+
+    s.onRecordingStarted = () {
+      if (_state == AppState.recording) return; // juz jestesmy
+      _enter(AppState.recording, fromRemote: true);
+    };
+    s.onRecordingProgress = (p) {
+      if (_state != AppState.recording) return;
+      _progress = p;
+      notifyListeners();
+    };
+    s.onRecordingStopped = () {
+      if (_state != AppState.recording) return;
+      _enter(AppState.processing, fromRemote: true);
+    };
+    s.onProcessingProgress = (p) {
+      if (_state != AppState.processing) return;
+      _progress = p;
+      notifyListeners();
+    };
+    s.onProcessingDone = () {
+      if (_state != AppState.processing) return;
+      _enter(AppState.transfer, fromRemote: true);
+    };
+    s.onUploadProgress = (p) {
+      if (_state != AppState.transfer) return;
+      _progress = p;
+      notifyListeners();
+    };
+    s.onVideoReceived = (path) {
+      if (_state != AppState.transfer && _state != AppState.processing) {
+        // Recorder moze uploadowac troche wczesniej niz dojdzie processingDone
+        // - i tak chcemy go odebrac.
+        debugPrint(
+            '[StateMachine] onVideoReceived in state ${_state.name}, forcing preview');
+      }
+      _currentJob = VideoJob(
+        id: 'rx_${DateTime.now().millisecondsSinceEpoch}',
+        createdAt: DateTime.now(),
+        localFilePath: path,
+      );
+      _enter(AppState.preview, fromRemote: true);
+    };
+    s.onRemoteError = (msg) {
+      debugPrint('[StateMachine] Remote error: $msg');
+      _reset();
+    };
+  }
+
   @override
   void dispose() {
     _cancelAllTimers();
@@ -71,59 +133,89 @@ class AppStateMachine extends ChangeNotifier {
     _autoAdvance?.cancel();
     _progressTicker?.cancel();
     _countdownTicker?.cancel();
+    _timeoutGuard?.cancel();
     _autoAdvance = null;
     _progressTicker = null;
     _countdownTicker = null;
+    _timeoutGuard = null;
   }
 
-  /// Przejscie do stanu + odpowiednie strategia (progress ticker + auto advance).
-  void _enter(AppState target) {
+  /// Przejscie do stanu.
+  /// [fromRemote] = true gdy event pochodzi z WS - nie odpalaj mock timerow.
+  void _enter(AppState target, {bool fromRemote = false}) {
     _state = target;
     _progress = 0.0;
     notifyListeners();
 
-    // Logowanie pomocne w dev.
-    debugPrint('[StateMachine] -> ${target.name}');
+    debugPrint(
+        '[StateMachine] -> ${target.name} ${fromRemote ? "(remote)" : "(local)"}');
+
+    _cancelAllTimers();
 
     switch (target) {
       case AppState.idle:
-        _cancelAllTimers();
+        // Nothing scheduled.
         break;
+
       case AppState.recording:
-        _runProgressThen(recordingDuration, AppState.processing);
+        if (fromRemote || isRealMode) {
+          // Tylko safety timeout - dzialamy reaktywnie z WS.
+          _timeoutGuard = Timer(recorderTimeout, () {
+            debugPrint('[StateMachine] recorder timeout in RECORDING');
+            _reset();
+          });
+        } else {
+          _runProgressThen(recordingDuration, AppState.processing);
+        }
         break;
+
       case AppState.processing:
-        _runProgressThen(processingDuration, AppState.transfer);
+        if (fromRemote || isRealMode) {
+          _timeoutGuard = Timer(recorderTimeout, () {
+            debugPrint('[StateMachine] recorder timeout in PROCESSING');
+            _reset();
+          });
+        } else {
+          _runProgressThen(processingDuration, AppState.transfer);
+        }
         break;
+
       case AppState.transfer:
-        _runProgressThen(transferDuration, AppState.preview, onComplete: () {
-          // Mock: tworzymy job gdy transfer konczy sie.
-          _currentJob = VideoJob.mock();
-        });
+        if (fromRemote || isRealMode) {
+          _timeoutGuard = Timer(recorderTimeout, () {
+            debugPrint('[StateMachine] recorder timeout in TRANSFER');
+            _reset();
+          });
+        } else {
+          _runProgressThen(transferDuration, AppState.preview, onComplete: () {
+            _currentJob = VideoJob.mock();
+          });
+        }
         break;
+
       case AppState.preview:
-        // Czeka na akcje usera (akceptuj / powtorz).
-        _cancelAllTimers();
+        // Czeka na user input.
         break;
+
       case AppState.uploading:
+        // Sesja 5: real upload do RPi. Na razie mock timer.
         _runProgressThen(uploadingDuration, AppState.qrDisplay, onComplete: () {
           _currentJob = _currentJob?.asUploaded();
         });
         break;
+
       case AppState.qrDisplay:
         _startQrCountdown();
         break;
+
       case AppState.thankYou:
-        _cancelAllTimers();
         _autoAdvance = Timer(thankYouDuration, _reset);
         break;
     }
   }
 
-  /// Uruchamia progress ticker od 0 do 1 przez [total]. Potem idzie do [next].
   void _runProgressThen(Duration total, AppState next,
       {VoidCallback? onComplete}) {
-    _cancelAllTimers();
     const tickMs = 100;
     final totalMs = total.inMilliseconds;
     int elapsed = 0;
@@ -141,9 +233,7 @@ class AppStateMachine extends ChangeNotifier {
     });
   }
 
-  /// Countdown 60 -> 0 na QR screen. Po zakonczeniu przechodzi do thankYou.
   void _startQrCountdown() {
-    _cancelAllTimers();
     _qrCountdownSeconds = qrDisplayDuration.inSeconds;
     notifyListeners();
     _countdownTicker = Timer.periodic(const Duration(seconds: 1), (t) {
@@ -169,33 +259,34 @@ class AppStateMachine extends ChangeNotifier {
 
   // Public actions
 
-  /// Start nagrywania (pilot / tablet / telefon).
+  /// Start - wysylany z pilota/tabletu. Jesli Recorder online: komenda WS.
+  /// Inaczej: mock flow.
   void startRecording() {
     if (_state != AppState.idle) return;
+    server?.sendToRecorder({'type': WireMsg.startRecording});
     _enter(AppState.recording);
   }
 
-  /// Manual STOP podczas recording - skraca do processing.
   void stopRecordingEarly() {
     if (_state != AppState.recording) return;
-    _cancelAllTimers();
-    _enter(AppState.processing);
+    server?.sendToRecorder({'type': WireMsg.stopRecording});
+    if (!isRealMode) {
+      // mock mode: nie czekamy na recorder, sami idziemy dalej.
+      _enter(AppState.processing);
+    }
   }
 
-  /// Z preview: gosc akceptuje film.
   void acceptVideo() {
     if (_state != AppState.preview) return;
     _enter(AppState.uploading);
   }
 
-  /// Z preview: gosc odrzuca film.
   void rejectVideo() {
     if (_state != AppState.preview) return;
     _currentJob = null;
     _reset();
   }
 
-  /// Z QR screen: skip na kolejnego goscia.
   void nextGuest() {
     if (_state != AppState.qrDisplay) return;
     _cancelAllTimers();
@@ -203,6 +294,5 @@ class AppStateMachine extends ChangeNotifier {
     _enter(AppState.thankYou);
   }
 
-  /// Debug / dev: wymuszenie resetu (uzywane w Settings "Reset state machine").
   void debugReset() => _reset();
 }
