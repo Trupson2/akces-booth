@@ -84,11 +84,25 @@ class VideoProcessor extends ChangeNotifier {
     // zaplanowane 8s - camera init delay, wczesniejszy stop).
     final actualDuration = await _probeDuration(inputPath) ?? config.inputDuration;
 
+    // Probe muzyki - auto-offset na chorus (30% dlugosci, clamp 30-60s).
+    int musicOffsetSec = 0;
+    if (config.musicPath != null && File(config.musicPath!).existsSync()) {
+      final musicDur = await _probeDuration(config.musicPath!);
+      if (musicDur != null && musicDur.inSeconds > 30) {
+        musicOffsetSec = (musicDur.inSeconds * 0.3).round().clamp(30, 60);
+      } else {
+        musicOffsetSec = 40;
+      }
+      debugPrint('[VideoProcessor] Music offset: ${musicOffsetSec}s '
+          '(dur: ${musicDur?.inSeconds ?? "?"}s)');
+    }
+
     final args = _buildArgs(
       inputPath: inputPath,
       outputPath: outputPath,
       config: config,
       actualDuration: actualDuration,
+      musicOffsetSec: musicOffsetSec,
     );
 
     debugPrint('[FFmpeg] args: ${args.join(" ")}');
@@ -176,6 +190,7 @@ class VideoProcessor extends ChangeNotifier {
     required String outputPath,
     required ProcessingConfig config,
     required Duration actualDuration,
+    int musicOffsetSec = 0,
   }) {
     final args = <String>['-y', '-i', inputPath];
 
@@ -183,6 +198,10 @@ class VideoProcessor extends ChangeNotifier {
     final hasMusic = config.musicPath != null &&
         File(config.musicPath!).existsSync();
     if (hasMusic) {
+      // -ss przed -i = fast seek na wejsciu muzyki (skip do chorus'a).
+      if (musicOffsetSec > 0) {
+        args.addAll(['-ss', '$musicOffsetSec']);
+      }
       args.addAll(['-i', config.musicPath!]);
     }
 
