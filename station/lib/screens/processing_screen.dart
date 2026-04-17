@@ -23,11 +23,9 @@ class ProcessingScreen extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 60),
         child: Column(
           children: [
-            _Step(label: 'Slow motion 2x', done: p > 0.25),
+            _Step(label: 'Slow motion 2x', done: p > 0.33),
             const SizedBox(height: 6),
-            _Step(label: 'Muzyka dodana', done: p > 0.5),
-            const SizedBox(height: 6),
-            _Step(label: 'Logo Akces 360', done: p > 0.75),
+            _Step(label: 'Muzyka dodana', done: p > 0.66),
             const SizedBox(height: 6),
             _Step(label: 'Finalny render', done: p >= 1.0),
           ],

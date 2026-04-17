@@ -10,6 +10,10 @@ import '../models/video_job.dart';
 /// W Sesji 3 wszystkie przejscia sa zmockowane przez Timery. W Sesji 4+
 /// podepniemy prawdziwe zdarzenia (start z Recorder przez WiFi, FFmpeg
 /// progress z OnePlus, transfer finish, upload do RPi).
+///
+/// UWAGA dla Sesji 6 (FFmpeg post-processing): NIE dodawac logo overlayu
+/// "Akces 360" na finalnym filmie - decyzja Adriana 17.04.2026.
+/// Tekst "Logo Akces 360" zostal usuniety z ProcessingScreen steps.
 class AppStateMachine extends ChangeNotifier {
   AppStateMachine();
 
