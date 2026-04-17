@@ -95,45 +95,54 @@ class _PreviewScreenState extends State<PreviewScreen> {
               ),
               const SizedBox(height: 16),
 
-              const Text(
-                'Jak Ci sie podoba? 😊',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
+              const FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'Jak Ci sie podoba? 😊',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
 
-              // Akcje
-              Row(
-                children: [
-                  Expanded(
-                    child: BigActionButton(
-                      label: 'AKCEPTUJ',
-                      icon: Icons.check_rounded,
-                      color: AppTheme.success,
-                      height: 100,
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        sm.acceptVideo();
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: BigActionButton(
-                      label: 'POWTORZ',
-                      icon: Icons.replay_rounded,
-                      color: AppTheme.surfaceLight,
-                      height: 100,
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        sm.rejectVideo();
-                      },
-                    ),
-                  ),
-                ],
+              // Akcje - height skalowany z ekranu
+              LayoutBuilder(
+                builder: (context, _) {
+                  final screenH = MediaQuery.of(context).size.height;
+                  final btnH = (screenH * 0.14).clamp(72.0, 110.0);
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: BigActionButton(
+                          label: 'AKCEPTUJ',
+                          icon: Icons.check_rounded,
+                          color: AppTheme.success,
+                          height: btnH,
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            sm.acceptVideo();
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: BigActionButton(
+                          label: 'POWTORZ',
+                          icon: Icons.replay_rounded,
+                          color: AppTheme.surfaceLight,
+                          height: btnH,
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            sm.rejectVideo();
+                          },
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ],
           ),
@@ -172,28 +181,34 @@ class _VideoPlaceholder extends StatelessWidget {
     return Container(
       color: AppTheme.surface,
       child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.movie_rounded,
-                size: 64, color: AppTheme.muted),
-            const SizedBox(height: 12),
-            const Text(
-              '[MOCK VIDEO PLACEHOLDER]',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 2,
-              ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.movie_rounded,
+                    size: 48, color: AppTheme.muted),
+                const SizedBox(height: 8),
+                const Text(
+                  '[MOCK VIDEO PLACEHOLDER]',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppTheme.muted, fontSize: 12),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppTheme.muted, fontSize: 13),
-            ),
-          ],
+          ),
         ),
       ),
     );

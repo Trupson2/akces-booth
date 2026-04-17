@@ -79,24 +79,30 @@ class _BigActionButtonState extends State<BigActionButton>
                   ],
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(widget.icon, size: 44, color: Colors.white),
-                      const SizedBox(width: 16),
-                      Flexible(
-                        child: Column(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          widget.icon,
+                          size: (widget.height * 0.38).clamp(24.0, 48.0),
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 14),
+                        Column(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               widget.label,
                               maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 32,
+                                fontSize:
+                                    (widget.height * 0.28).clamp(18.0, 34.0),
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: 0.5,
                               ),
@@ -107,15 +113,16 @@ class _BigActionButtonState extends State<BigActionButton>
                                 widget.subtitle!,
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.8),
-                                  fontSize: 14,
+                                  fontSize:
+                                      (widget.height * 0.11).clamp(10.0, 16.0),
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ],
                           ],
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

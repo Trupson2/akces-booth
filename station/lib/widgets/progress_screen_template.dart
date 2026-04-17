@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 /// Wspolna baza dla stanow z progressem: recording / processing / transfer / uploading.
+/// Layout samo-skalujacy - dziala zarowno na Tab A11+ (800h) jak telefonie landscape (~380h).
 class ProgressScreenTemplate extends StatelessWidget {
   const ProgressScreenTemplate({
     super.key,
@@ -33,62 +34,85 @@ class ProgressScreenTemplate extends StatelessWidget {
 
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Spacer(),
-              Center(
-                child: Text(emoji, style: const TextStyle(fontSize: 72)),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 44,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AppTheme.muted,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 40),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final h = constraints.maxHeight;
+            // Skalowanie font/emoji w zakresie telefon..tablet (380..800).
+            final emojiSize = (h * 0.12).clamp(32.0, 80.0);
+            final titleSize = (h * 0.085).clamp(24.0, 48.0);
+            final subSize = (h * 0.03).clamp(12.0, 18.0);
+            final pctSize = (h * 0.045).clamp(16.0, 28.0);
 
-              // Progress
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 16,
-                  backgroundColor: Colors.white.withValues(alpha: 0.1),
-                  valueColor: AlwaysStoppedAnimation<Color>(barColor),
-                ),
+            return Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: 32,
+                vertical: (h * 0.04).clamp(12.0, 32.0),
               ),
-              const SizedBox(height: 12),
-              Text(
-                pct,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(emoji, style: TextStyle(fontSize: emojiSize)),
+                          const SizedBox(height: 8),
+                          Text(
+                            title,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: titleSize,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            subtitle,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppTheme.muted,
+                              fontSize: subSize,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
 
-              const Spacer(),
-              ?footer,
-            ],
-          ),
+                  // Progress
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 12,
+                      backgroundColor: Colors.white.withValues(alpha: 0.1),
+                      valueColor: AlwaysStoppedAnimation<Color>(barColor),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    pct,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: pctSize,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+
+                  if (footer != null) ...[
+                    const SizedBox(height: 12),
+                    footer!,
+                  ],
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
