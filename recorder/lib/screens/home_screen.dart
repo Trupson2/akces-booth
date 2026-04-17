@@ -6,6 +6,7 @@ import '../services/motor_controller.dart';
 import '../theme/app_theme.dart';
 import '../widgets/big_button.dart';
 import '../widgets/status_indicator.dart';
+import 'recording_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -236,11 +237,17 @@ class _ControlsPanel extends StatelessWidget {
               const SizedBox(width: 12),
               BigButton(
                 label: running ? 'STOP' : 'START',
-                icon: running ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                icon: running ? Icons.stop_rounded : Icons.videocam_rounded,
                 color: running ? AppTheme.error : AppTheme.success,
                 size: startSize,
                 disabled: !connected,
-                onTap: running ? motor.stop : motor.start,
+                onTap: running
+                    ? motor.stop
+                    : () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const RecordingScreen(),
+                          ),
+                        ),
               ),
             ],
           ),

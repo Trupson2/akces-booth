@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'app.dart';
+import 'services/camera_service.dart';
 import 'services/mock_motor_controller.dart';
 import 'services/motor_controller.dart';
 
@@ -13,8 +14,15 @@ Future<void> main() async {
     DeviceOrientation.landscapeRight,
   ]);
   runApp(
-    ChangeNotifierProvider<MotorController>(
-      create: (_) => MockMotorController(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<MotorController>(
+          create: (_) => MockMotorController(),
+        ),
+        ChangeNotifierProvider<CameraService>(
+          create: (_) => CameraService(),
+        ),
+      ],
       child: const AkcesBoothRecorder(),
     ),
   );
