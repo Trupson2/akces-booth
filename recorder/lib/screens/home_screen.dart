@@ -31,21 +31,31 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const _TopBar(),
-              const SizedBox(height: 14),
-              const _StatusColumn(),
-              const SizedBox(height: 14),
-              const _StartButton(),
-              const SizedBox(height: 14),
-              const _SpeedSection(),
-              const SizedBox(height: 12),
-              const _ReverseButton(),
-              const SizedBox(height: 12),
-              const Spacer(),
+              // Scrollowalna sekcja glowna - na mniejszych telefonach
+              // po prostu scrolluje sie, zero overflow.
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: const [
+                      _TopBar(),
+                      SizedBox(height: 12),
+                      _StatusColumn(),
+                      SizedBox(height: 12),
+                      _StartButton(),
+                      SizedBox(height: 12),
+                      _SpeedSection(),
+                      SizedBox(height: 10),
+                      _ReverseButton(),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
               _DebugLogButton(onTap: () => _openDebugLog(context)),
             ],
           ),
