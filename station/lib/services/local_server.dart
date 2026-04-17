@@ -169,6 +169,10 @@ class LocalServer extends ChangeNotifier {
         case WireMsg.pong:
           // ignorujemy
           break;
+        case WireMsg.ping:
+          // Odsylamy pong - Recorder sprawdza ze zyjemy.
+          sendToRecorder({'type': WireMsg.pong});
+          break;
         default:
           debugPrint('[LocalServer] Unknown msg type: $type');
       }
