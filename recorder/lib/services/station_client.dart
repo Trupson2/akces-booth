@@ -212,6 +212,9 @@ class StationClient extends ChangeNotifier {
   void sendProcessingDone() =>
       send({'type': WireMsg.processingDone});
 
+  void sendUploadProgress(double progress) =>
+      send({'type': WireMsg.uploadProgress, 'progress': progress});
+
   void sendError(String message) =>
       send({'type': WireMsg.error, 'message': message});
 
@@ -240,7 +243,9 @@ class StationClient extends ChangeNotifier {
         ),
         onSendProgress: (sent, total) {
           if (total > 0) {
-            sendProcessingProgress(sent / total);
+            // Station jest w stanie `transfer` podczas uploadu - wysylamy
+            // upload_progress, nie processing_progress.
+            sendUploadProgress(sent / total);
           }
         },
       );
