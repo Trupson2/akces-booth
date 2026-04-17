@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/recording_mode.dart';
+import '../models/recording_resolution.dart';
 import '../services/camera_service.dart';
 import '../services/motor_controller.dart';
 import '../theme/app_theme.dart';
@@ -191,44 +192,84 @@ class _TopBar extends StatelessWidget {
       top: 12,
       left: 12,
       right: 12,
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _RoundBtn(
-            icon: Icons.arrow_back_rounded,
-            onTap: () => Navigator.of(context).maybePop(),
+          Row(
+            children: [
+              _RoundBtn(
+                icon: Icons.arrow_back_rounded,
+                onTap: () => Navigator.of(context).maybePop(),
+              ),
+              const SizedBox(width: 12),
+              if (camera.isInitialized) _StatusBadges(camera: camera),
+              const Spacer(),
+            ],
           ),
-          const SizedBox(width: 12),
-          if (camera.isInitialized)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.videocam_rounded,
-                      size: 16, color: Colors.white),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${camera.mode.fps} fps',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (camera.highFpsDegraded) ...[
-                    const SizedBox(width: 6),
-                    const Icon(Icons.warning_amber_rounded,
-                        size: 14, color: Colors.amber),
-                  ],
-                ],
-              ),
+          if (!camera.isRecording && camera.isInitialized) ...[
+            const SizedBox(height: 10),
+            _ModeChips(camera: camera),
+            const SizedBox(height: 8),
+            _ResolutionChips(camera: camera),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusBadges extends StatelessWidget {
+  const _StatusBadges({required this.camera});
+  final CameraService camera;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.videocam_rounded, size: 14, color: Colors.white),
+          const SizedBox(width: 5),
+          Text(
+            '${camera.mode.fps}fps',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
             ),
-          const Spacer(),
-          if (!camera.isRecording && camera.isInitialized) _ModeChips(camera: camera),
+          ),
+          if (camera.highFpsDegraded) ...[
+            const SizedBox(width: 4),
+            const Icon(Icons.warning_amber_rounded,
+                size: 12, color: Colors.amber),
+          ],
+          Container(
+            width: 1,
+            height: 12,
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            color: Colors.white24,
+          ),
+          const Icon(Icons.high_quality_rounded,
+              size: 14, color: Colors.white),
+          const SizedBox(width: 5),
+          Text(
+            camera.resolution.label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (camera.resolutionDegraded) ...[
+            const SizedBox(width: 4),
+            const Icon(Icons.warning_amber_rounded,
+                size: 12, color: Colors.amber),
+          ],
         ],
       ),
     );
@@ -241,60 +282,122 @@ class _ModeChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: RecordingMode.values.map((m) {
-          final selected = m == camera.mode;
-          return GestureDetector(
-            onTap: () => camera.setMode(m),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              margin: const EdgeInsets.symmetric(horizontal: 2),
-              decoration: BoxDecoration(
-                color: selected ? AppTheme.primary : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    m.label,
-                    style: TextStyle(
-                      color: selected ? Colors.white : Colors.white70,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  if (m.isBeta) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 5, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(4),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: RecordingMode.values.map((m) {
+            final selected = m == camera.mode;
+            return GestureDetector(
+              onTap: () => camera.setMode(m),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                decoration: BoxDecoration(
+                  color: selected ? AppTheme.primary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      m.label,
+                      style: TextStyle(
+                        color: selected ? Colors.white : Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
                       ),
-                      child: const Text(
-                        'BETA',
-                        style: TextStyle(
-                          color: Colors.black,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
+                    ),
+                    if (m.isBeta) ...[
+                      const SizedBox(width: 5),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'BETA',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 8,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          );
-        }).toList(),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+}
+
+class _ResolutionChips extends StatelessWidget {
+  const _ResolutionChips({required this.camera});
+  final CameraService camera;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: RecordingResolution.values.map((r) {
+            final selected = r == camera.resolution;
+            return GestureDetector(
+              onTap: () => camera.setResolution(r),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                decoration: BoxDecoration(
+                  color: selected ? AppTheme.accent : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      r.label,
+                      style: TextStyle(
+                        color: selected ? Colors.white : Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (r.isHeavy) ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.bolt_rounded,
+                        size: 12,
+                        color: selected
+                            ? Colors.white
+                            : Colors.amber.withValues(alpha: 0.9),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
@@ -354,23 +457,19 @@ class _BottomControls extends StatelessWidget {
           colors: [Colors.transparent, Colors.black.withValues(alpha: 0.6)],
         ),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: isRecording
-                ? _RecordingTimer(elapsed: elapsed, fraction: fraction, max: max)
-                : _IdleHint(mode: camera.mode),
-          ),
-          const SizedBox(width: 16),
+          isRecording
+              ? _RecordingTimer(elapsed: elapsed, fraction: fraction, max: max)
+              : _IdleHint(mode: camera.mode),
+          const SizedBox(height: 14),
           _RecordButton(
             recording: isRecording,
             disabled: !canTap,
             pulse: pulse,
             onTap: onToggle,
           ),
-          const SizedBox(width: 16),
-          const Expanded(child: SizedBox.shrink()),
         ],
       ),
     );
@@ -385,10 +484,11 @@ class _IdleHint extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         const Text(
           'Nacisnij aby nagrac',
+          textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.white,
             fontSize: 14,
@@ -398,6 +498,7 @@ class _IdleHint extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           '${mode.label} • auto-stop 8s',
+          textAlign: TextAlign.center,
           style: const TextStyle(color: Colors.white60, fontSize: 11),
         ),
       ],
@@ -422,9 +523,10 @@ class _RecordingTimer extends StatelessWidget {
     final total = max.inSeconds;
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
@@ -447,16 +549,13 @@ class _RecordingTimer extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-        SizedBox(
-          width: 240,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: fraction,
-              minHeight: 5,
-              backgroundColor: Colors.white.withValues(alpha: 0.2),
-              valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.error),
-            ),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: fraction,
+            minHeight: 5,
+            backgroundColor: Colors.white.withValues(alpha: 0.2),
+            valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.error),
           ),
         ),
       ],
