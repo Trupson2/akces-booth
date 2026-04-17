@@ -11,6 +11,7 @@ class VideoJob {
     this.assetPath,
     this.shortId,
     this.publicUrl,
+    this.publishToFacebook = false,
   });
 
   /// UUID / timestamp do identyfikacji.
@@ -31,11 +32,15 @@ class VideoJob {
   /// URL do filmu na RPi dla QR (np. 'booth.akces360.pl/v/AB3D5F').
   final String? publicUrl;
 
+  /// Gosc zaznaczyl zgode na publikacje na FB @akces360 (QR screen).
+  final bool publishToFacebook;
+
   VideoJob copyWith({
     String? localFilePath,
     String? assetPath,
     String? shortId,
     String? publicUrl,
+    bool? publishToFacebook,
   }) {
     return VideoJob(
       id: id,
@@ -44,6 +49,7 @@ class VideoJob {
       assetPath: assetPath ?? this.assetPath,
       shortId: shortId ?? this.shortId,
       publicUrl: publicUrl ?? this.publicUrl,
+      publishToFacebook: publishToFacebook ?? this.publishToFacebook,
     );
   }
 

@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS videos (
     metadata TEXT,
     view_count INTEGER DEFAULT 0,
     download_count INTEGER DEFAULT 0,
+    publish_to_facebook INTEGER DEFAULT 0,
+    published_to_facebook_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (event_id) REFERENCES events(id)
 );
@@ -87,6 +89,20 @@ def init_db(db_path: Path | str) -> None:
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(str(db_path)) as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Idempotentne migracje dla istniejacych instalek."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(videos)").fetchall()}
+    if "publish_to_facebook" not in cols:
+        conn.execute(
+            "ALTER TABLE videos ADD COLUMN publish_to_facebook INTEGER DEFAULT 0"
+        )
+    if "published_to_facebook_at" not in cols:
+        conn.execute(
+            "ALTER TABLE videos ADD COLUMN published_to_facebook_at TIMESTAMP"
+        )
 
 
 @contextmanager
@@ -185,19 +201,55 @@ def insert_video(db_path: Path, *, event_id: int, short_id: str,
                  original_filename: str | None, file_path: str,
                  file_size: int | None = None,
                  duration_seconds: float | None = None,
-                 metadata: dict[str, Any] | None = None) -> int:
+                 metadata: dict[str, Any] | None = None,
+                 publish_to_facebook: bool = False) -> int:
     meta_json = json.dumps(metadata) if metadata else None
     with get_conn(db_path) as conn:
         cur = conn.execute(
             """
             INSERT INTO videos (event_id, short_id, original_filename, file_path,
-                                file_size, duration_seconds, metadata)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                                file_size, duration_seconds, metadata,
+                                publish_to_facebook)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (event_id, short_id, original_filename, file_path, file_size,
-             duration_seconds, meta_json),
+             duration_seconds, meta_json, 1 if publish_to_facebook else 0),
         )
         return int(cur.lastrowid or 0)
+
+
+def list_videos_pending_publish(db_path: Path) -> list[dict[str, Any]]:
+    """Filmy z opt-in FB, ktore jeszcze nie zostaly opublikowane."""
+    with get_conn(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT v.*, e.name AS event_name
+            FROM videos v
+            LEFT JOIN events e ON e.id = v.event_id
+            WHERE v.publish_to_facebook = 1
+              AND v.published_to_facebook_at IS NULL
+            ORDER BY v.created_at DESC
+            """
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def mark_video_published(db_path: Path, video_id: int) -> None:
+    with get_conn(db_path) as conn:
+        conn.execute(
+            "UPDATE videos SET published_to_facebook_at = CURRENT_TIMESTAMP "
+            "WHERE id = ?",
+            (video_id,),
+        )
+
+
+def unmark_video_publish(db_path: Path, video_id: int) -> None:
+    """Wycofanie zgody z panelu (np. gdy operator zdecyduje nie publikowac)."""
+    with get_conn(db_path) as conn:
+        conn.execute(
+            "UPDATE videos SET publish_to_facebook = 0 WHERE id = ?",
+            (video_id,),
+        )
 
 
 def get_video_by_short_id(db_path: Path, short_id: str) -> dict[str, Any] | None:

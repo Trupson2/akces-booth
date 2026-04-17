@@ -27,6 +27,8 @@ dependencies:
   path_provider: ^2.1.0
   # Backend client (upload + event sync)
   dio: ^5.4.0
+  # SHA-256 do hashowania PIN-u w Settings
+  crypto: ^3.0.3
 
 dev_dependencies:
   flutter_test:

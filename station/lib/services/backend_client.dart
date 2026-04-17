@@ -104,6 +104,7 @@ class BackendClient {
   /// Upload mp4 do backendu. Zwraca short_id + public_url albo null.
   Future<BackendUploadResult?> uploadVideo({
     required String videoPath,
+    bool publishToFacebook = false,
     void Function(double progress)? onProgress,
   }) async {
     if (!isConfigured) return null;
@@ -122,6 +123,7 @@ class BackendClient {
             'Content-Type': 'video/mp4',
             'X-API-Key': _apiKey,
             'X-Filename': filename,
+            'X-Publish-Facebook': publishToFacebook ? '1' : '0',
           },
         ),
         onSendProgress: (sent, total) {

@@ -9,6 +9,8 @@ import 'services/event_manager.dart';
 import 'services/local_server.dart';
 import 'services/mock_services.dart';
 import 'services/motor_controller.dart';
+import 'services/pin_service.dart';
+import 'services/settings_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +32,12 @@ Future<void> main() async {
     eventManager: eventManager,
   )..attachServer();
 
+  // PIN + lokalne preferencje Settings - ladujemy z diska przed runApp,
+  // zeby router mogl od razu zdecydowac czy pokazac PinSetupScreen.
+  final pin = PinService();
+  final settings = SettingsStore();
+  await Future.wait([pin.load(), settings.load()]);
+
   // Event manager start (async - loads config, first sync, starts polling).
   unawaitedStartEvents(eventManager);
 
@@ -46,6 +54,8 @@ Future<void> main() async {
         ChangeNotifierProvider<MotorController>(
           create: (_) => MockStationMotorController(),
         ),
+        ChangeNotifierProvider<PinService>.value(value: pin),
+        ChangeNotifierProvider<SettingsStore>.value(value: settings),
       ],
       child: const AkcesBoothStation(),
     ),

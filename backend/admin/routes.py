@@ -144,3 +144,35 @@ def library():  # type: ignore[no-untyped-def]
 @require_admin
 def ai_generator_page():  # type: ignore[no-untyped-def]
     return render_template("admin/ai_generator.html")
+
+
+@admin_bp.route("/do-publikacji")
+@require_admin
+def publish_queue():  # type: ignore[no-untyped-def]
+    """Filmy oznaczone przez gosci zgoda na FB @akces360, jeszcze nie opublikowane.
+
+    Publikacja rezna (manualna, batch) - Adrian zatwierdza/pobiera kazdy
+    przed wrzuceniem.
+    """
+    videos = models.list_videos_pending_publish(Config.DB_PATH)
+    return render_template(
+        "admin/publish_queue.html",
+        videos=videos,
+        public_base=Config.PUBLIC_BASE_URL,
+    )
+
+
+@admin_bp.route("/do-publikacji/<int:video_id>/mark", methods=["POST"])
+@require_admin
+def mark_published(video_id: int):  # type: ignore[no-untyped-def]
+    models.mark_video_published(Config.DB_PATH, video_id)
+    flash("Oznaczone jako opublikowane.", "ok")
+    return redirect(url_for("admin.publish_queue"))
+
+
+@admin_bp.route("/do-publikacji/<int:video_id>/skip", methods=["POST"])
+@require_admin
+def skip_publish(video_id: int):  # type: ignore[no-untyped-def]
+    models.unmark_video_publish(Config.DB_PATH, video_id)
+    flash("Usunieto z kolejki publikacji.", "ok")
+    return redirect(url_for("admin.publish_queue"))

@@ -283,6 +283,7 @@ class AppStateMachine extends ChangeNotifier {
 
     final result = await be.uploadVideo(
       videoPath: job.localFilePath!,
+      publishToFacebook: job.publishToFacebook,
       onProgress: (p) {
         _progress = p;
         notifyListeners();
@@ -300,10 +301,7 @@ class AppStateMachine extends ChangeNotifier {
     }
 
     // Update job z prawdziwymi URL-ami z backendu.
-    _currentJob = VideoJob(
-      id: job.id,
-      createdAt: job.createdAt,
-      localFilePath: job.localFilePath,
+    _currentJob = job.copyWith(
       shortId: result.shortId,
       publicUrl: result.publicUrl,
     );
@@ -336,6 +334,14 @@ class AppStateMachine extends ChangeNotifier {
   void acceptVideo() {
     if (_state != AppState.preview) return;
     _enter(AppState.uploading);
+  }
+
+  /// Ustawia flage FB (z checkboxa na QR screen / Preview).
+  void setPublishToFacebook(bool value) {
+    final job = _currentJob;
+    if (job == null) return;
+    _currentJob = job.copyWith(publishToFacebook: value);
+    notifyListeners();
   }
 
   void rejectVideo() {

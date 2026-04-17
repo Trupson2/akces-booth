@@ -2,8 +2,28 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-class ThankYouScreen extends StatelessWidget {
+/// Wyswietla sie 3s miedzy QR_DISPLAY a IDLE.
+/// Plynne pojawienie + delikatne skalowanie emoji - nic krzykliwego, bo
+/// za chwile kolejny gosc ma czysty IDLE.
+class ThankYouScreen extends StatefulWidget {
   const ThankYouScreen({super.key});
+
+  @override
+  State<ThankYouScreen> createState() => _ThankYouScreenState();
+}
+
+class _ThankYouScreenState extends State<ThankYouScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 700),
+  )..forward();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -11,6 +31,7 @@ class ThankYouScreen extends StatelessWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
+          // Subtelne zielone tlo - sygnal sukcesu.
           Container(
             decoration: const BoxDecoration(
               gradient: RadialGradient(
@@ -23,30 +44,39 @@ class ThankYouScreen extends StatelessWidget {
               ),
             ),
           ),
-          const Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('🙂', style: TextStyle(fontSize: 96)),
-                SizedBox(height: 16),
-                Text(
-                  'Dziekujemy!',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 64,
-                    fontWeight: FontWeight.w900,
-                  ),
+          Center(
+            child: FadeTransition(
+              opacity: _c.drive(CurveTween(curve: Curves.easeOut)),
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.9, end: 1.0).animate(
+                  CurvedAnimation(parent: _c, curve: Curves.easeOutBack),
                 ),
-                SizedBox(height: 8),
-                Text(
-                  'Zapraszamy kolejnego goscia',
-                  style: TextStyle(
-                    color: AppTheme.muted,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w500,
-                  ),
+                child: const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('🎉', style: TextStyle(fontSize: 96)),
+                    SizedBox(height: 16),
+                    Text(
+                      'Dziekujemy!',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 64,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -1,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Kolejny gosc zapraszamy 🙂',
+                      style: TextStyle(
+                        color: AppTheme.muted,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ],

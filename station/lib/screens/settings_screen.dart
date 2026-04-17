@@ -7,12 +7,17 @@ import '../services/backend_client.dart';
 import '../services/event_manager.dart';
 import '../services/local_server.dart';
 import '../services/mock_services.dart';
+import '../services/pin_service.dart';
+import '../services/settings_store.dart';
 import '../theme/app_theme.dart';
 import 'backend_setup_screen.dart';
 import 'bt_setup_screen.dart';
+import 'pin_entry_screen.dart';
+import 'pin_setup_screen.dart';
 
-/// Placeholder Settings - PIN protection dorzucimy w Sesji 9.
-/// Na razie otwiera sie bezposrednio po long-press na "Ustawienia" w footerze.
+/// Settings chroniony PIN-em (brama w IdleScreen). Zgodne z WORKFLOW.md:
+/// biezacy event, muzyka fallback, parametry nagrywania, polaczenia,
+/// statystyki, zmiana PIN, wylogowanie.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -23,6 +28,7 @@ class SettingsScreen extends StatelessWidget {
     final server = context.watch<LocalServer>();
     final backend = context.watch<BackendClient>();
     final events = context.watch<EventManager>();
+    final settings = context.watch<SettingsStore>();
 
     return Scaffold(
       appBar: AppBar(
@@ -39,20 +45,34 @@ class SettingsScreen extends StatelessWidget {
           _Section(
             title: '🎬 BIEZACY EVENT',
             children: [
-              _Row('Nazwa', 'Wesele Demo (placeholder)'),
-              _Row('Data', '17.04.2026'),
-              _Row('Nagrano filmow', '${sm.videoCount}'),
+              _Row(
+                'Nazwa',
+                events.hasActiveEvent
+                    ? events.activeEvent!.name
+                    : 'Brak aktywnego eventu',
+              ),
+              _Row(
+                'Data',
+                events.hasActiveEvent
+                    ? (events.activeEvent!.eventDate ?? '-')
+                    : '-',
+              ),
+              _Row('Nagrano filmow',
+                  '${events.hasActiveEvent ? events.videoCount : sm.videoCount}'),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () => events.syncNow(),
+                    icon: const Icon(Icons.sync_rounded, size: 16),
+                    label: const Text('Sync teraz'),
+                  ),
+                ],
+              ),
             ],
           ),
-          _Section(
-            title: '⚙️ PARAMETRY NAGRYWANIA',
-            children: const [
-              _Row('Dlugosc filmu', '8 sekund'),
-              _Row('Slow-motion', '2x (post-process)'),
-              _Row('Predkosc obrotu', '7/10'),
-              _Row('Kierunek', 'Zmienny'),
-            ],
-          ),
+          _MusicSection(settings: settings, events: events),
+          _RecordingParamsSection(settings: settings),
           _Section(
             title: '☁️ BACKEND (Akces Booth API)',
             children: [
@@ -81,34 +101,17 @@ class SettingsScreen extends StatelessWidget {
               _ServerInfoRow(server: server),
             ],
           ),
-          _Section(
-            title: '🔗 POLACZENIA',
-            children: [
-              _StatusRow(
-                label: 'Fotobudka BT',
-                ok: conn.bluetoothReady,
-                okText: 'YCKJNB-MOCK',
-                failText: 'Brak pary',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const BtSetupScreen(),
-                  ),
-                ),
-              ),
-              _StatusRow(
-                label: 'OnePlus 13',
-                ok: conn.recorderOnline,
-                okText: '192.168.1.45 (mock)',
-                failText: 'Offline',
-              ),
-              _StatusRow(
-                label: 'Internet',
-                ok: conn.internetOnline,
-                okText: 'booth.akces360.pl (mock)',
-                failText: 'Offline',
-              ),
-            ],
+          _ConnectionsSection(
+            conn: conn,
+            backend: backend,
+            server: server,
           ),
+          _StatsSection(
+            sm: sm,
+            server: server,
+            events: events,
+          ),
+          _SecuritySection(),
           _Section(
             title: '🛠 DEV',
             children: [
@@ -122,12 +125,6 @@ class SettingsScreen extends StatelessWidget {
                 },
               ),
             ],
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'TODO (Sesja 9): PIN protection, event management, music picker, '
-            'statystyki online.',
-            style: TextStyle(color: AppTheme.muted, fontSize: 12),
           ),
         ],
       ),
@@ -397,5 +394,419 @@ class _StatusRow extends StatelessWidget {
           ? null
           : const Icon(Icons.chevron_right_rounded, color: AppTheme.muted),
     );
+  }
+}
+
+class _MusicSection extends StatelessWidget {
+  const _MusicSection({required this.settings, required this.events});
+  final SettingsStore settings;
+  final EventManager events;
+
+  static const _options = [
+    'Wesele Classical',
+    'Energetic Party',
+    'Chill Vibe',
+    'Random',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final activeFromEvent = events.hasActiveEvent &&
+        events.activeEvent!.musicId != null;
+    return _Section(
+      title: '🎵 MUZYKA (FALLBACK)',
+      children: [
+        if (activeFromEvent)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Event ma przypisana muzyke - fallback uzywany tylko '
+              'gdy event zniknie.',
+              style: TextStyle(color: AppTheme.muted, fontSize: 12),
+            ),
+          ),
+        for (final opt in _options)
+          RadioListTile<String>(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            value: opt,
+            groupValue: settings.fallbackMusic,
+            onChanged: (v) {
+              if (v != null) settings.setFallbackMusic(v);
+            },
+            title: Text(opt,
+                style: const TextStyle(color: Colors.white, fontSize: 14)),
+            activeColor: AppTheme.primary,
+          ),
+      ],
+    );
+  }
+}
+
+class _RecordingParamsSection extends StatelessWidget {
+  const _RecordingParamsSection({required this.settings});
+  final SettingsStore settings;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Section(
+      title: '⚙️ PARAMETRY NAGRYWANIA',
+      children: [
+        _StepperRow(
+          label: 'Dlugosc filmu',
+          value: '${settings.videoDurationSec}s',
+          onMinus: () => settings.setVideoDuration(settings.videoDurationSec - 1),
+          onPlus: () => settings.setVideoDuration(settings.videoDurationSec + 1),
+        ),
+        _DropdownRow<double>(
+          label: 'Slow-motion',
+          value: settings.slowMoFactor,
+          items: const [
+            (1.0, '1x (bez)'),
+            (2.0, '2x'),
+            (4.0, '4x'),
+          ],
+          onChanged: (v) => settings.setSlowMoFactor(v),
+        ),
+        _DropdownRow<String>(
+          label: 'Kierunek obrotu',
+          value: settings.rotationDir,
+          items: const [
+            ('cw', 'W prawo'),
+            ('ccw', 'W lewo'),
+            ('mixed', 'Zmienny'),
+          ],
+          onChanged: (v) => settings.setRotationDir(v),
+        ),
+        _StepperRow(
+          label: 'Predkosc obrotu',
+          value: '${settings.rotationSpeed}/10',
+          onMinus: () => settings.setRotationSpeed(settings.rotationSpeed - 1),
+          onPlus: () => settings.setRotationSpeed(settings.rotationSpeed + 1),
+        ),
+        const SizedBox(height: 6),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          value: settings.fbDefaultOn,
+          onChanged: (v) => settings.setFbDefault(v),
+          activeThumbColor: AppTheme.primary,
+          title: const Text('Domyslnie zgoda na FB',
+              style: TextStyle(color: Colors.white, fontSize: 14)),
+          subtitle: const Text(
+            'Checkbox na QR screen bedzie wstepnie zaznaczony',
+            style: TextStyle(color: AppTheme.muted, fontSize: 12),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StepperRow extends StatelessWidget {
+  const _StepperRow({
+    required this.label,
+    required this.value,
+    required this.onMinus,
+    required this.onPlus,
+  });
+  final String label;
+  final String value;
+  final VoidCallback onMinus;
+  final VoidCallback onPlus;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                style: const TextStyle(color: AppTheme.muted, fontSize: 14)),
+          ),
+          IconButton(
+            onPressed: onMinus,
+            icon: const Icon(Icons.remove_circle_outline,
+                color: AppTheme.muted),
+            visualDensity: VisualDensity.compact,
+          ),
+          SizedBox(
+            width: 64,
+            child: Text(
+              value,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: onPlus,
+            icon: const Icon(Icons.add_circle_outline, color: AppTheme.muted),
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DropdownRow<T> extends StatelessWidget {
+  const _DropdownRow({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+  final String label;
+  final T value;
+  final List<(T, String)> items;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                style: const TextStyle(color: AppTheme.muted, fontSize: 14)),
+          ),
+          DropdownButton<T>(
+            value: value,
+            dropdownColor: AppTheme.surface,
+            underline: const SizedBox.shrink(),
+            iconEnabledColor: AppTheme.muted,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+            items: [
+              for (final (v, label) in items)
+                DropdownMenuItem<T>(value: v, child: Text(label)),
+            ],
+            onChanged: (v) {
+              if (v != null) onChanged(v);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConnectionsSection extends StatefulWidget {
+  const _ConnectionsSection({
+    required this.conn,
+    required this.backend,
+    required this.server,
+  });
+  final ConnectivityStatus conn;
+  final BackendClient backend;
+  final LocalServer server;
+
+  @override
+  State<_ConnectionsSection> createState() => _ConnectionsSectionState();
+}
+
+class _ConnectionsSectionState extends State<_ConnectionsSection> {
+  bool _testing = false;
+  String? _testResult;
+
+  Future<void> _test() async {
+    setState(() {
+      _testing = true;
+      _testResult = null;
+    });
+    final ok = await widget.backend.testConnection();
+    if (!mounted) return;
+    setState(() {
+      _testing = false;
+      _testResult = ok
+          ? '✅ Backend online (healthz 200)'
+          : '❌ Brak odpowiedzi backendu';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final conn = widget.conn;
+    return _Section(
+      title: '🔗 POLACZENIA',
+      children: [
+        _StatusRow(
+          label: 'Fotobudka BT',
+          ok: conn.bluetoothReady,
+          okText: 'YCKJNB-MOCK',
+          failText: 'Brak pary',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const BtSetupScreen(),
+            ),
+          ),
+        ),
+        _StatusRow(
+          label: 'OnePlus 13 (Recorder)',
+          ok: widget.server.isRecorderConnected || conn.recorderOnline,
+          okText: widget.server.isRecorderConnected
+              ? 'WS polaczony'
+              : '192.168.1.45 (mock)',
+          failText: 'Offline',
+        ),
+        _StatusRow(
+          label: 'Internet',
+          ok: conn.internetOnline,
+          okText: widget.backend.isConfigured
+              ? widget.backend.baseUrl
+              : 'booth.akces360.pl (mock)',
+          failText: 'Offline',
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: _testing ? null : _test,
+              icon: _testing
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.network_check_rounded, size: 16),
+              label: Text(_testing ? 'Testuje...' : 'Test polaczenia'),
+            ),
+            const SizedBox(width: 12),
+            if (_testResult != null)
+              Expanded(
+                child: Text(
+                  _testResult!,
+                  style: const TextStyle(
+                    color: AppTheme.muted,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _StatsSection extends StatelessWidget {
+  const _StatsSection({
+    required this.sm,
+    required this.server,
+    required this.events,
+  });
+  final AppStateMachine sm;
+  final LocalServer server;
+  final EventManager events;
+
+  @override
+  Widget build(BuildContext context) {
+    final videos = events.hasActiveEvent ? events.videoCount : sm.videoCount;
+    final recorderBattery = server.lastRecorderBattery;
+    final recorderDiskGb = server.lastRecorderDiskFreeGb;
+    return _Section(
+      title: '📊 DZISIEJSZE STATYSTYKI',
+      children: [
+        _Row('Nagrano filmow', '$videos'),
+        _Row('Bateria OnePlus',
+            recorderBattery != null ? '$recorderBattery%' : '-'),
+        _Row('Wolny dysk',
+            recorderDiskGb != null ? '${recorderDiskGb.toStringAsFixed(1)} GB' : '-'),
+        _Row(
+          'Aktywna sesja',
+          server.isRecorderConnected ? 'Recorder online' : 'Recorder offline',
+        ),
+      ],
+    );
+  }
+}
+
+class _SecuritySection extends StatelessWidget {
+  const _SecuritySection();
+
+  @override
+  Widget build(BuildContext context) {
+    return _Section(
+      title: '🔒 PIN & SESJA',
+      children: [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.vpn_key_rounded, color: AppTheme.muted),
+          title: const Text('Zmien PIN',
+              style: TextStyle(color: Colors.white, fontSize: 14)),
+          subtitle: const Text('Najpierw wpisz obecny PIN',
+              style: TextStyle(color: AppTheme.muted, fontSize: 12)),
+          trailing: const Icon(Icons.chevron_right_rounded,
+              color: AppTheme.muted),
+          onTap: () => _changePin(context),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.logout_rounded, color: AppTheme.error),
+          title: const Text('Wyloguj',
+              style: TextStyle(color: Colors.white, fontSize: 14)),
+          subtitle: const Text(
+            'Wyczysc PIN - przy nastepnym wejsciu trzeba go ustawic ponownie',
+            style: TextStyle(color: AppTheme.muted, fontSize: 12),
+          ),
+          onTap: () => _logout(context),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _changePin(BuildContext context) async {
+    final ok = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const PinEntryScreen()),
+    );
+    if (ok != true || !context.mounted) return;
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => const PinSetupScreen(
+          title: 'Nowy PIN',
+          subtitle: 'Wpisz nowy 4-cyfrowy PIN',
+          closable: true,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _logout(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: const Text('Wyloguj?'),
+        content: const Text(
+          'Wyczyscimy PIN. Przy nastepnym wejsciu do Settings '
+          'poprosimy o ustawienie nowego PIN-u.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Anuluj'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.error,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Wyloguj'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !context.mounted) return;
+    await context.read<PinService>().reset();
+    if (!context.mounted) return;
+    Navigator.of(context).popUntil((r) => r.isFirst);
   }
 }

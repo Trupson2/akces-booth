@@ -58,6 +58,10 @@ def upload_video():  # type: ignore[no-untyped-def]
     target = event_dir / f"{short_id}{suffix}"
     target.write_bytes(data)
 
+    publish_fb = (request.headers.get("X-Publish-Facebook") or "0").strip() in {
+        "1", "true", "yes",
+    }
+
     video_id = models.insert_video(
         Config.DB_PATH,
         event_id=event["id"],
@@ -66,9 +70,11 @@ def upload_video():  # type: ignore[no-untyped-def]
         file_path=str(target.relative_to(Config.BASE_DIR)) if str(target).startswith(
             str(Config.BASE_DIR)) else str(target),
         file_size=len(data),
+        publish_to_facebook=publish_fb,
     )
 
-    log.info("Uploaded video id=%s short_id=%s size=%d", video_id, short_id, len(data))
+    log.info("Uploaded video id=%s short_id=%s size=%d fb=%s",
+             video_id, short_id, len(data), publish_fb)
 
     return jsonify({
         "status": "ok",

@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 import '../widgets/animated_counter.dart';
 import '../widgets/big_action_button.dart';
 import '../widgets/status_indicator.dart';
+import 'pin_entry_screen.dart';
 import 'settings_screen.dart';
 
 class IdleScreen extends StatelessWidget {
@@ -92,26 +93,19 @@ class IdleScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
 
-                  // Footer: logo + settings
+                  // Footer: Akces 360 logo (long-press 3s -> PIN -> Settings)
                   Row(
                     children: [
-                      const Text(
-                        'Akces 360',
+                      _AkcesLogoGate(),
+                      const Spacer(),
+                      Text(
+                        'Przytrzymaj logo 3s zeby wejsc do Settings',
                         style: TextStyle(
-                          color: AppTheme.muted,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 3,
+                          color: AppTheme.muted.withValues(alpha: 0.55),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const Spacer(),
-                      _SettingsLink(onLongPress: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const SettingsScreen(),
-                          ),
-                        );
-                      }),
                     ],
                   ),
                 ],
@@ -183,31 +177,120 @@ class _BrandingBackdrop extends StatelessWidget {
   }
 }
 
-class _SettingsLink extends StatelessWidget {
-  const _SettingsLink({required this.onLongPress});
-  final VoidCallback onLongPress;
+/// Dlugie przytrzymanie loga Akces 360 (3s) -> PIN -> Settings.
+class _AkcesLogoGate extends StatefulWidget {
+  @override
+  State<_AkcesLogoGate> createState() => _AkcesLogoGateState();
+}
+
+class _AkcesLogoGateState extends State<_AkcesLogoGate>
+    with SingleTickerProviderStateMixin {
+  static const _holdDuration = Duration(seconds: 3);
+
+  late final AnimationController _anim = AnimationController(
+    vsync: this,
+    duration: _holdDuration,
+  );
+
+  bool _opening = false;
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  void _onDown(_) {
+    _anim.forward(from: 0.0);
+  }
+
+  void _onUpOrCancel([_]) {
+    if (_anim.isCompleted) return;
+    _anim.stop();
+    _anim.reverse();
+  }
+
+  Future<void> _onHoldComplete() async {
+    if (_opening) return;
+    _opening = true;
+    try {
+      final ok = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => const PinEntryScreen()),
+      );
+      if (!mounted) return;
+      if (ok == true) {
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute(builder: (_) => const SettingsScreen()),
+        );
+      }
+    } finally {
+      _opening = false;
+      if (mounted) _anim.reverse();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Przytrzymaj 1s zeby otworzyc ustawienia',
-      child: GestureDetector(
-        onLongPress: onLongPress,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(Icons.settings_rounded, size: 18, color: AppTheme.muted),
-            SizedBox(width: 6),
-            Text(
-              'Ustawienia',
-              style: TextStyle(
-                color: AppTheme.muted,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: _onDown,
+      onTapUp: _onUpOrCancel,
+      onTapCancel: _onUpOrCancel,
+      child: AnimatedBuilder(
+        animation: _anim,
+        builder: (context, _) {
+          if (_anim.isCompleted && !_opening) {
+            // Wystartuj flow po dotarciu do konca paska.
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _onHoldComplete();
+            });
+          }
+          final progress = _anim.value;
+          return Stack(
+            alignment: Alignment.centerLeft,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppTheme.surface.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppTheme.primary
+                        .withValues(alpha: 0.15 + 0.7 * progress),
+                    width: 1,
+                  ),
+                ),
+                child: const Text(
+                  'Akces 360',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 3,
+                  ),
+                ),
               ),
-            ),
-          ],
-        ),
+              // Progress fill - narastajacy pasek indigo pokazujacy 0..3s.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: FractionallySizedBox(
+                        widthFactor: progress,
+                        child: Container(
+                          color: AppTheme.primary.withValues(alpha: 0.35),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

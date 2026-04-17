@@ -29,6 +29,14 @@ class LocalServer extends ChangeNotifier {
   String? _localIp;
   String? _lastError;
 
+  /// Ostatnio zaraportowane przez Recorder (komunikat `recorder_status`).
+  /// Null = jeszcze nic nie dotarlo.
+  int? _lastRecorderBattery;
+  double? _lastRecorderDiskFreeGb;
+
+  int? get lastRecorderBattery => _lastRecorderBattery;
+  double? get lastRecorderDiskFreeGb => _lastRecorderDiskFreeGb;
+
   /// Callbacks ustawiane przez AppStateMachine. Brak -> ignoruj event.
   void Function()? onRecordingStarted;
   void Function(double progress)? onRecordingProgress;
@@ -145,6 +153,13 @@ class LocalServer extends ChangeNotifier {
       final Map<String, dynamic> msg = jsonDecode(raw as String);
       final type = msg['type'] as String?;
       switch (type) {
+        case WireMsg.recorderStatus:
+          final battery = msg['battery'];
+          final disk = msg['disk_free_gb'];
+          if (battery is num) _lastRecorderBattery = battery.toInt();
+          if (disk is num) _lastRecorderDiskFreeGb = disk.toDouble();
+          notifyListeners();
+          break;
         case WireMsg.recordingStarted:
           onRecordingStarted?.call();
           break;
