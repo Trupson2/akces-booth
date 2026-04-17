@@ -3,9 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../services/app_state_machine.dart';
+import '../services/backend_client.dart';
+import '../services/event_manager.dart';
 import '../services/local_server.dart';
 import '../services/mock_services.dart';
 import '../theme/app_theme.dart';
+import 'backend_setup_screen.dart';
 import 'bt_setup_screen.dart';
 
 /// Placeholder Settings - PIN protection dorzucimy w Sesji 9.
@@ -18,6 +21,8 @@ class SettingsScreen extends StatelessWidget {
     final conn = context.watch<ConnectivityStatus>();
     final sm = context.watch<AppStateMachine>();
     final server = context.watch<LocalServer>();
+    final backend = context.watch<BackendClient>();
+    final events = context.watch<EventManager>();
 
     return Scaffold(
       appBar: AppBar(
@@ -46,6 +51,28 @@ class SettingsScreen extends StatelessWidget {
               _Row('Slow-motion', '2x (post-process)'),
               _Row('Predkosc obrotu', '7/10'),
               _Row('Kierunek', 'Zmienny'),
+            ],
+          ),
+          _Section(
+            title: '☁️ BACKEND (Akces Booth API)',
+            children: [
+              _BackendRow(backend: backend, events: events),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const BackendSetupScreen(),
+                  ),
+                ),
+                icon: const Icon(Icons.settings_rounded),
+                label: Text(backend.isConfigured
+                    ? 'Zmien URL / klucz API'
+                    : 'Skonfiguruj backend'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                ),
+              ),
             ],
           ),
           _Section(
@@ -277,6 +304,59 @@ class _CopyableValue extends StatelessWidget {
                 duration: const Duration(seconds: 2),
               ));
           },
+        ),
+      ],
+    );
+  }
+}
+
+class _BackendRow extends StatelessWidget {
+  const _BackendRow({required this.backend, required this.events});
+  final BackendClient backend;
+  final EventManager events;
+
+  @override
+  Widget build(BuildContext context) {
+    final ok = backend.isConfigured;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              ok ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
+              color: ok ? AppTheme.success : AppTheme.muted,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    ok ? backend.baseUrl : 'Brak konfiguracji',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    events.hasActiveEvent
+                        ? 'Aktywny event: ${events.activeEvent!.name} '
+                            '(${events.videoCount} filmow)'
+                        : (events.lastError ?? 'Brak aktywnego eventu'),
+                    style: TextStyle(
+                      color: events.hasActiveEvent
+                          ? AppTheme.success
+                          : AppTheme.muted,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ],
     );

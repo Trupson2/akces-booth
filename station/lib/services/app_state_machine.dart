@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 
 import '../models/app_state.dart';
 import '../models/video_job.dart';
+import 'backend_client.dart';
+import 'event_manager.dart';
 import 'local_server.dart';
 import 'wire_protocol.dart';
 
@@ -21,10 +23,16 @@ import 'wire_protocol.dart';
 /// UWAGA dla Sesji 6 (FFmpeg post-processing): NIE dodawac logo overlayu
 /// "Akces 360" na finalnym filmie - decyzja Adriana 17.04.2026.
 class AppStateMachine extends ChangeNotifier {
-  AppStateMachine({this.server});
+  AppStateMachine({this.server, this.backend, this.eventManager});
 
   /// Ustawiany przez main.dart po starcie serwera.
   final LocalServer? server;
+
+  /// Klient backendu - real upload.
+  final BackendClient? backend;
+
+  /// Event manager - licznik filmow + config.
+  final EventManager? eventManager;
 
   AppState _state = AppState.idle;
   VideoJob? _currentJob;
@@ -198,10 +206,7 @@ class AppStateMachine extends ChangeNotifier {
         break;
 
       case AppState.uploading:
-        // Sesja 5: real upload do RPi. Na razie mock timer.
-        _runProgressThen(uploadingDuration, AppState.qrDisplay, onComplete: () {
-          _currentJob = _currentJob?.asUploaded();
-        });
+        _doRealUpload();
         break;
 
       case AppState.qrDisplay:
@@ -255,6 +260,58 @@ class AppStateMachine extends ChangeNotifier {
     _qrCountdownSeconds = 0;
     _state = AppState.idle;
     notifyListeners();
+  }
+
+  /// Real upload do backendu. Jesli backend nie skonfigurowany lub fail -
+  /// fallback do mock timera (zeby gosci nie zostawic z niczym).
+  Future<void> _doRealUpload() async {
+    final job = _currentJob;
+    final be = backend;
+
+    if (job == null || job.localFilePath == null || be == null || !be.isConfigured) {
+      debugPrint('[StateMachine] upload: brak job/backendu - mock fallback');
+      _runProgressThen(uploadingDuration, AppState.qrDisplay, onComplete: () {
+        _currentJob = _currentJob?.asUploaded();
+      });
+      return;
+    }
+
+    _timeoutGuard = Timer(const Duration(minutes: 3), () {
+      debugPrint('[StateMachine] upload timeout');
+      _reset();
+    });
+
+    final result = await be.uploadVideo(
+      videoPath: job.localFilePath!,
+      onProgress: (p) {
+        _progress = p;
+        notifyListeners();
+      },
+    );
+
+    _timeoutGuard?.cancel();
+    _timeoutGuard = null;
+
+    if (result == null) {
+      debugPrint('[StateMachine] upload failed - fallback mock');
+      _currentJob = _currentJob?.asUploaded();
+      _enter(AppState.qrDisplay);
+      return;
+    }
+
+    // Update job z prawdziwymi URL-ami z backendu.
+    _currentJob = VideoJob(
+      id: job.id,
+      createdAt: job.createdAt,
+      localFilePath: job.localFilePath,
+      shortId: result.shortId,
+      publicUrl: result.publicUrl,
+    );
+
+    // Powiadom event manager (animacja "+1 film!").
+    eventManager?.onVideoUploaded();
+
+    _enter(AppState.qrDisplay);
   }
 
   // Public actions

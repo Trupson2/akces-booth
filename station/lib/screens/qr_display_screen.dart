@@ -13,8 +13,10 @@ class QrDisplayScreen extends StatelessWidget {
     final sm = context.watch<AppStateMachine>();
     final job = sm.currentJob;
 
-    final url = job?.publicUrl ?? 'booth.akces360.pl/v/MOCK12';
-    final fullUrl = 'https://$url';
+    // publicUrl z backendu moze byc juz pelny "https://..." albo tylko host/path.
+    final rawUrl = job?.publicUrl ?? 'booth.akces360.pl/v/MOCK12';
+    final fullUrl = rawUrl.startsWith('http') ? rawUrl : 'https://$rawUrl';
+    final url = rawUrl.replaceAll(RegExp(r'^https?://'), '');
 
     return Scaffold(
       body: SafeArea(

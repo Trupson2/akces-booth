@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/app_state_machine.dart';
+import '../services/event_manager.dart';
 import '../services/local_server.dart';
 import '../services/mock_services.dart';
 import '../theme/app_theme.dart';
@@ -18,6 +19,7 @@ class IdleScreen extends StatelessWidget {
     final sm = context.watch<AppStateMachine>();
     final conn = context.watch<ConnectivityStatus>();
     final server = context.watch<LocalServer>();
+    final events = context.watch<EventManager>();
 
     return Scaffold(
       body: Stack(
@@ -34,8 +36,12 @@ class IdleScreen extends StatelessWidget {
                   Row(
                     children: [
                       AnimatedCounter(
-                        value: sm.videoCount,
-                        label: 'DZIS FILMOW',
+                        value: events.hasActiveEvent
+                            ? events.videoCount
+                            : sm.videoCount,
+                        label: events.hasActiveEvent
+                            ? (events.activeEvent!.name.toUpperCase())
+                            : 'DZIS FILMOW',
                       ),
                       const Spacer(),
                       StatusDot(

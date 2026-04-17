@@ -11,6 +11,34 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'settings_store.dart';
 import 'wire_protocol.dart';
 
+/// Konfig eventu przyslany ze Station (Sesja 7).
+class EventConfig {
+  EventConfig({
+    required this.eventId,
+    required this.eventName,
+    this.overlayPath,
+    this.musicPath,
+    this.textTop,
+    this.textBottom,
+  });
+
+  final int eventId;
+  final String eventName;
+  final String? overlayPath;
+  final String? musicPath;
+  final String? textTop;
+  final String? textBottom;
+
+  factory EventConfig.fromJson(Map<String, dynamic> j) => EventConfig(
+        eventId: (j['event_id'] as num?)?.toInt() ?? 0,
+        eventName: j['event_name']?.toString() ?? '',
+        overlayPath: j['overlay_path']?.toString(),
+        musicPath: j['music_path']?.toString(),
+        textTop: j['text_top']?.toString(),
+        textBottom: j['text_bottom']?.toString(),
+      );
+}
+
 /// Stan polaczenia z Station.
 enum StationConnState {
   disconnected,
@@ -46,6 +74,13 @@ class StationClient extends ChangeNotifier {
 
   /// Callback: Station prosi o manualny stop.
   void Function()? onStopRequested;
+
+  /// Callback: Station wyslala konfig aktywnego eventu (Sesja 7).
+  void Function(EventConfig config)? onEventConfig;
+
+  /// Ostatni event config z Station (persystuje miedzy nagraniami).
+  EventConfig? _lastEventConfig;
+  EventConfig? get lastEventConfig => _lastEventConfig;
 
   StationConnState get state => _state;
   bool get isConnected => _state == StationConnState.connected;
@@ -178,6 +213,12 @@ class StationClient extends ChangeNotifier {
           break;
         case WireMsg.ping:
           send({'type': WireMsg.pong});
+          break;
+        case WireMsg.eventConfig:
+          final cfg = EventConfig.fromJson(msg);
+          _lastEventConfig = cfg;
+          debugPrint('[StationClient] Event config: ${cfg.eventName}');
+          onEventConfig?.call(cfg);
           break;
         default:
           debugPrint('[StationClient] Unknown msg: ${msg['type']}');

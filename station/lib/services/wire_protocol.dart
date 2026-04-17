@@ -6,6 +6,7 @@ class WireMsg {
   // Station -> Recorder
   static const startRecording = 'start_recording';
   static const stopRecording = 'stop_recording';
+  static const eventConfig = 'event_config';
   static const ping = 'ping';
 
   // Recorder -> Station

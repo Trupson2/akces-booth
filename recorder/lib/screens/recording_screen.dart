@@ -202,12 +202,37 @@ class _RecordingScreenState extends State<RecordingScreen>
     try {
       client.sendProcessingProgress(0.0);
       final picker = RandomEffectPicker();
-      final params = picker.pick(musicPool: musicLib.availablePaths);
-      final config = ProcessingConfig.fromRandom(
+
+      // Jesli Station przyslala event_config - laczymy jego muzyke z pula
+      // (priorytet na event-specific) + overlay/text z eventu.
+      final eventCfg = client.lastEventConfig;
+      final musicPool = <String>[
+        if (eventCfg?.musicPath != null) eventCfg!.musicPath!,
+        ...musicLib.availablePaths,
+      ];
+
+      final params = picker.pick(musicPool: musicPool);
+      var config = ProcessingConfig.fromRandom(
         params: params,
         inputDuration: _kMaxRecording,
       );
-      debugPrint('[RecordingScreen] Random effect: ${params.debugSignature}');
+      // Dodajemy overlay + text z event config (jesli dostarczone).
+      if (eventCfg != null) {
+        config = ProcessingConfig(
+          template: config.template,
+          slowMoTailFactor: config.slowMoTailFactor,
+          slowMoTailSeconds: config.slowMoTailSeconds,
+          speedUpFactor: config.speedUpFactor,
+          freezeSeconds: config.freezeSeconds,
+          musicPath: config.musicPath,
+          overlayPath: eventCfg.overlayPath,
+          textTop: eventCfg.textTop,
+          textBottom: eventCfg.textBottom,
+          inputDuration: config.inputDuration,
+        );
+      }
+      debugPrint('[RecordingScreen] Random effect: ${params.debugSignature} '
+          'event=${eventCfg?.eventName ?? "none"}');
       finalPath = await processor.process(
         inputPath: rawPath,
         config: config,
