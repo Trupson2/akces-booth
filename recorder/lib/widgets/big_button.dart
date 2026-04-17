@@ -9,6 +9,8 @@ class BigButton extends StatelessWidget {
     required this.color,
     required this.onTap,
     this.size = 120,
+    this.width,
+    this.height,
     this.disabled = false,
     this.subtitle,
   });
@@ -19,6 +21,8 @@ class BigButton extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
   final double size;
+  final double? width;
+  final double? height;
   final bool disabled;
 
   @override
@@ -32,8 +36,8 @@ class BigButton extends StatelessWidget {
           onTap: disabled ? null : onTap,
           borderRadius: BorderRadius.circular(24),
           child: Ink(
-            width: size,
-            height: size,
+            width: width ?? size,
+            height: height ?? size,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(24),
               gradient: LinearGradient(

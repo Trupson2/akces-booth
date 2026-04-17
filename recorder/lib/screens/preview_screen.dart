@@ -68,7 +68,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
             Center(
               child: _ready
                   ? AspectRatio(
-                      aspectRatio: _controller.value.aspectRatio,
+                      aspectRatio: _controller.value.aspectRatio < 1
+                          ? _controller.value.aspectRatio
+                          : 1 / _controller.value.aspectRatio,
                       child: VideoPlayer(_controller),
                     )
                   : const CircularProgressIndicator(color: AppTheme.primary),

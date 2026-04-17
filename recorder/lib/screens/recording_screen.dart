@@ -169,10 +169,11 @@ class _RecordingScreenState extends State<RecordingScreen>
         if (ctrl == null || !ctrl.value.isInitialized) {
           return const SizedBox.shrink();
         }
-        // Camera preview w landscape - CameraPreview robi to automatycznie.
+        // Camera preview w portrait - ctrl.value.aspectRatio zwraca sensor w/h
+        // (landscape 16:9 = 1.77), w portrait viewport invertujemy do 9:16.
         return Center(
           child: AspectRatio(
-            aspectRatio: ctrl.value.aspectRatio,
+            aspectRatio: 1 / ctrl.value.aspectRatio,
             child: CameraPreview(ctrl),
           ),
         );

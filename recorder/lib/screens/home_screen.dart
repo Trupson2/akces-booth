@@ -31,23 +31,21 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           child: Column(
-            children: [
-              const _TopBar(),
-              const SizedBox(height: 12),
-              const _StatusRow(),
-              const SizedBox(height: 14),
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: const [
-                    Expanded(flex: 5, child: _ControlsPanel()),
-                    SizedBox(width: 16),
-                    Expanded(flex: 4, child: _DebugLogPanel()),
-                  ],
-                ),
-              ),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: const [
+              _TopBar(),
+              SizedBox(height: 14),
+              _StatusColumn(),
+              SizedBox(height: 14),
+              _StartButton(),
+              SizedBox(height: 14),
+              _SpeedSection(),
+              SizedBox(height: 12),
+              _ReverseButton(),
+              SizedBox(height: 12),
+              Expanded(child: _DebugLogPanel()),
             ],
           ),
         ),
@@ -65,8 +63,8 @@ class _TopBar extends StatelessWidget {
     return Row(
       children: [
         Container(
-          width: 40,
-          height: 40,
+          width: 42,
+          height: 42,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [AppTheme.primary, AppTheme.accent],
@@ -78,25 +76,28 @@ class _TopBar extends StatelessWidget {
           child: const Icon(Icons.camera_rounded, color: Colors.white, size: 22),
         ),
         const SizedBox(width: 12),
-        const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Akces Booth Recorder',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Akces Booth Recorder',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
-            Text(
-              'Sesja 1 - mock motor',
-              style: TextStyle(color: AppTheme.muted, fontSize: 11),
-            ),
-          ],
+              Text(
+                'Sesja 1 - mock motor',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: AppTheme.muted, fontSize: 11),
+              ),
+            ],
+          ),
         ),
-        const Spacer(),
         Icon(
           motor.isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
           color: motor.isConnected ? AppTheme.success : AppTheme.muted,
@@ -111,47 +112,42 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-class _StatusRow extends StatelessWidget {
-  const _StatusRow();
+class _StatusColumn extends StatelessWidget {
+  const _StatusColumn();
 
   @override
   Widget build(BuildContext context) {
     final motor = context.watch<MotorController>();
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: StatusIndicator(
-            icon: Icons.bluetooth_rounded,
-            label: 'BLUETOOTH',
-            value: motor.isConnected ? 'Connected (mock)' : 'Connecting...',
-            color: motor.isConnected ? AppTheme.success : AppTheme.muted,
-          ),
+        StatusIndicator(
+          icon: Icons.bluetooth_rounded,
+          label: 'BLUETOOTH',
+          value: motor.isConnected ? 'Connected (mock)' : 'Connecting...',
+          color: motor.isConnected ? AppTheme.success : AppTheme.muted,
         ),
-        const SizedBox(width: 12),
-        const Expanded(
-          child: StatusIndicator(
-            icon: Icons.battery_4_bar_rounded,
-            label: 'BATERIA',
-            value: '67%',
-            color: AppTheme.success,
-          ),
+        const SizedBox(height: 8),
+        const StatusIndicator(
+          icon: Icons.battery_4_bar_rounded,
+          label: 'BATERIA',
+          value: '67%',
+          color: AppTheme.success,
         ),
-        const SizedBox(width: 12),
-        const Expanded(
-          child: StatusIndicator(
-            icon: Icons.tablet_mac_rounded,
-            label: 'TABLET',
-            value: 'Oczekiwanie (Sesja 3)',
-            color: AppTheme.muted,
-          ),
+        const SizedBox(height: 8),
+        const StatusIndicator(
+          icon: Icons.tablet_mac_rounded,
+          label: 'TABLET',
+          value: 'Oczekiwanie (Sesja 3)',
+          color: AppTheme.muted,
         ),
       ],
     );
   }
 }
 
-class _ControlsPanel extends StatelessWidget {
-  const _ControlsPanel();
+class _StartButton extends StatelessWidget {
+  const _StartButton();
 
   @override
   Widget build(BuildContext context) {
@@ -159,100 +155,90 @@ class _ControlsPanel extends StatelessWidget {
     final connected = motor.isConnected;
     final running = motor.isRunning;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final h = constraints.maxHeight;
-        final startSize = (h * 0.88).clamp(110.0, 220.0);
+    return SizedBox(
+      height: 150,
+      child: LayoutBuilder(
+        builder: (_, c) => BigButton(
+          label: running ? 'STOP' : 'START',
+          icon: running ? Icons.stop_rounded : Icons.videocam_rounded,
+          color: running ? AppTheme.error : AppTheme.success,
+          size: 150,
+          width: c.maxWidth,
+          height: 150,
+          disabled: !connected,
+          onTap: running
+              ? motor.stop
+              : () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const RecordingScreen(),
+                    ),
+                  ),
+        ),
+      ),
+    );
+  }
+}
 
-        return Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppTheme.surface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Column(
-                  children: [
-                    Expanded(
-                      flex: 4,
-                      child: _SpeedDisplay(speed: motor.currentSpeed),
+class _SpeedSection extends StatelessWidget {
+  const _SpeedSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final motor = context.watch<MotorController>();
+    final connected = motor.isConnected;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SpeedDisplay(speed: motor.currentSpeed),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 56,
+            child: Row(
+              children: [
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (_, c) => BigButton(
+                      label: 'SPEED -',
+                      icon: Icons.remove_rounded,
+                      color: AppTheme.accent,
+                      size: 56,
+                      width: c.maxWidth,
+                      height: 56,
+                      disabled: !connected ||
+                          motor.currentSpeed <= MotorState.minSpeed,
+                      onTap: motor.speedDown,
                     ),
-                    const SizedBox(height: 6),
-                    Expanded(
-                      flex: 3,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          LayoutBuilder(
-                            builder: (_, c) => BigButton(
-                              label: 'SPEED -',
-                              icon: Icons.remove_rounded,
-                              color: AppTheme.accent,
-                              size: c.maxHeight,
-                              disabled: !connected ||
-                                  motor.currentSpeed <= MotorState.minSpeed,
-                              onTap: motor.speedDown,
-                            ),
-                          ),
-                          LayoutBuilder(
-                            builder: (_, c) => BigButton(
-                              label: 'SPEED +',
-                              icon: Icons.add_rounded,
-                              color: AppTheme.accent,
-                              size: c.maxHeight,
-                              disabled: !connected ||
-                                  motor.currentSpeed >= MotorState.maxSpeed,
-                              onTap: motor.speedUp,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Expanded(
-                      flex: 3,
-                      child: LayoutBuilder(
-                        builder: (_, c) => Center(
-                          child: BigButton(
-                            label: 'REVERSE',
-                            subtitle: motor.direction.label,
-                            icon: motor.direction == Direction.clockwise
-                                ? Icons.rotate_right_rounded
-                                : Icons.rotate_left_rounded,
-                            color: AppTheme.primary,
-                            size: c.maxHeight,
-                            disabled: !connected,
-                            onTap: motor.reverseDirection,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              BigButton(
-                label: running ? 'STOP' : 'START',
-                icon: running ? Icons.stop_rounded : Icons.videocam_rounded,
-                color: running ? AppTheme.error : AppTheme.success,
-                size: startSize,
-                disabled: !connected,
-                onTap: running
-                    ? motor.stop
-                    : () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const RecordingScreen(),
-                          ),
-                        ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (_, c) => BigButton(
+                      label: 'SPEED +',
+                      icon: Icons.add_rounded,
+                      color: AppTheme.accent,
+                      size: 56,
+                      width: c.maxWidth,
+                      height: 56,
+                      disabled: !connected ||
+                          motor.currentSpeed >= MotorState.maxSpeed,
+                      onTap: motor.speedUp,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
@@ -268,7 +254,6 @@ class _SpeedDisplay extends StatelessWidget {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
         const Text(
@@ -281,22 +266,18 @@ class _SpeedDisplay extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
-        const SizedBox(height: 2),
-        Expanded(
-          child: FittedBox(
-            fit: BoxFit.contain,
-            child: Text(
-              speed.toString(),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                height: 1,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
+        const SizedBox(height: 4),
+        Text(
+          speed.toString(),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 52,
+            height: 1,
+            fontWeight: FontWeight.w800,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 8),
         ClipRRect(
           borderRadius: BorderRadius.circular(6),
           child: LinearProgressIndicator(
@@ -311,6 +292,35 @@ class _SpeedDisplay extends StatelessWidget {
   }
 }
 
+class _ReverseButton extends StatelessWidget {
+  const _ReverseButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final motor = context.watch<MotorController>();
+    final connected = motor.isConnected;
+
+    return SizedBox(
+      height: 64,
+      child: LayoutBuilder(
+        builder: (_, c) => BigButton(
+          label: 'REVERSE',
+          subtitle: motor.direction.label,
+          icon: motor.direction == Direction.clockwise
+              ? Icons.rotate_right_rounded
+              : Icons.rotate_left_rounded,
+          color: AppTheme.primary,
+          size: 64,
+          width: c.maxWidth,
+          height: 64,
+          disabled: !connected,
+          onTap: motor.reverseDirection,
+        ),
+      ),
+    );
+  }
+}
+
 class _DebugLogPanel extends StatelessWidget {
   const _DebugLogPanel();
 
@@ -320,10 +330,10 @@ class _DebugLogPanel extends StatelessWidget {
     final log = motor.log;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
       child: Column(
@@ -344,7 +354,7 @@ class _DebugLogPanel extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Expanded(
             child: log.isEmpty
                 ? const Center(
@@ -366,7 +376,7 @@ class _DebugLogPanel extends StatelessWidget {
                           fontFamily: 'monospace',
                           color: Colors.greenAccent,
                           fontSize: 10,
-                          height: 1.25,
+                          height: 1.3,
                         ),
                       ),
                     ),
