@@ -1,0 +1,90 @@
+{% extends "admin/_layout.html" %}
+{% block title %}Early access · zapisani{% endblock %}
+
+{% block admin_content %}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-3xl font-black">Early access · lista zapisanych</h1>
+    <p class="text-slate-400 text-sm mt-1">
+      Fotobudkarze ktorzy zapisali sie przez
+      <a href="/early-access/" target="_blank" class="text-indigo-400 hover:underline">booth.akces360.pl/early-access/</a>
+    </p>
+  </div>
+  <div class="flex gap-3 text-sm">
+    <div class="bg-slate-800 px-4 py-2 rounded-lg">
+      <div class="text-slate-400 text-xs uppercase">Total</div>
+      <div class="font-bold text-2xl text-indigo-300">{{ total }}</div>
+    </div>
+    <div class="bg-slate-800 px-4 py-2 rounded-lg">
+      <div class="text-slate-400 text-xs uppercase">Ze zgoda</div>
+      <div class="font-bold text-2xl text-emerald-400">{{ with_consent }}</div>
+    </div>
+  </div>
+</div>
+
+{% if not signups %}
+  <div class="bg-slate-800 rounded-xl p-8 text-center">
+    <div class="text-5xl mb-2">📭</div>
+    <div class="font-bold">Brak zapisanych</div>
+    <div class="text-slate-400 text-sm mt-1">
+      Gdy ktos wypelni formularz - pojawi sie tutaj.
+      Powiadomienie mailowe trafi na adres z <code>NOTIFY_TO</code>.
+    </div>
+  </div>
+{% else %}
+  <div class="bg-slate-800 rounded-xl overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-900/50">
+        <tr class="text-left">
+          <th class="px-4 py-3 text-slate-400 font-medium text-xs uppercase tracking-wider">Email</th>
+          <th class="px-4 py-3 text-slate-400 font-medium text-xs uppercase tracking-wider">Zgoda</th>
+          <th class="px-4 py-3 text-slate-400 font-medium text-xs uppercase tracking-wider">Hero</th>
+          <th class="px-4 py-3 text-slate-400 font-medium text-xs uppercase tracking-wider">IP</th>
+          <th class="px-4 py-3 text-slate-400 font-medium text-xs uppercase tracking-wider">User-Agent</th>
+          <th class="px-4 py-3 text-slate-400 font-medium text-xs uppercase tracking-wider">Data</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in signups %}
+          <tr class="border-t border-slate-700/50 hover:bg-slate-900/30">
+            <td class="px-4 py-3 font-mono text-indigo-300">
+              <a href="mailto:{{ s.email }}" class="hover:underline">{{ s.email }}</a>
+            </td>
+            <td class="px-4 py-3">
+              {% if s.consent %}
+                <span class="text-emerald-400">✓</span>
+              {% else %}
+                <span class="text-slate-500">—</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 font-mono text-xs">
+              {% if s.hero_variant %}
+                <span class="bg-slate-700 px-2 py-0.5 rounded">{{ s.hero_variant }}</span>
+              {% else %}
+                <span class="text-slate-500">—</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 font-mono text-xs text-slate-400">
+              {{ s.ip or "—" }}
+            </td>
+            <td class="px-4 py-3 text-xs text-slate-500 max-w-xs truncate"
+                title="{{ s.user_agent or '' }}">
+              {{ (s.user_agent or "—")[:60] }}{% if s.user_agent and s.user_agent|length > 60 %}…{% endif %}
+            </td>
+            <td class="px-4 py-3 font-mono text-xs text-slate-400 whitespace-nowrap">
+              {{ s.created_at }}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="mt-6 text-slate-400 text-xs">
+    Tip: zapisane dane sa wylacznie do celow walidacyjnych (early access).
+    Kazdy moze zazadac usuniecia przez email do
+    <a href="mailto:adrian@akces360.pl" class="text-indigo-400">adrian@akces360.pl</a>
+    zgodnie z polityka prywatnosci.
+  </div>
+{% endif %}
+{% endblock %}

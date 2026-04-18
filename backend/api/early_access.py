@@ -15,6 +15,7 @@ from flask import (
 
 import models
 from config import Config
+from notifier import notify_new_signup
 
 log = logging.getLogger(__name__)
 
@@ -79,6 +80,15 @@ def signup():  # type: ignore[no-untyped-def]
         )
         log.info("Early-access signup id=%s email=%s variant=%s",
                  signup_id, email, hero_variant)
+        # Fire-and-forget SMTP notifier (nie blokuje response).
+        notify_new_signup(
+            email=email,
+            consent=consent,
+            ip=ip,
+            user_agent=ua,
+            hero_variant=hero_variant,
+            signup_id=signup_id,
+        )
         return jsonify({"ok": True, "id": signup_id})
     except Exception as e:
         log.exception("Early-access signup failed: %s", e)

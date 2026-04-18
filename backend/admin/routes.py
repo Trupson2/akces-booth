@@ -146,6 +146,21 @@ def ai_generator_page():  # type: ignore[no-untyped-def]
     return render_template("admin/ai_generator.html")
 
 
+@admin_bp.route("/early-access-signups")
+@require_admin
+def early_access_signups():  # type: ignore[no-untyped-def]
+    """Lista wszystkich zapisanych na /early-access - dla superadmina."""
+    signups = models.list_early_access_signups(Config.DB_PATH)
+    total = len(signups)
+    with_consent = sum(1 for s in signups if s.get("consent"))
+    return render_template(
+        "admin/early_access_signups.html",
+        signups=signups,
+        total=total,
+        with_consent=with_consent,
+    )
+
+
 @admin_bp.route("/do-publikacji")
 @require_admin
 def publish_queue():  # type: ignore[no-untyped-def]

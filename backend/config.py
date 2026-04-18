@@ -51,6 +51,16 @@ class Config:
 
     LOG_LEVEL = _env("LOG_LEVEL", "INFO") or "INFO"
 
+    # SMTP (notyfikacje signup + wiadomosci systemowe).
+    # Gdy SMTP_HOST pusty - notyfikacje sa NO-OP (tylko log info).
+    SMTP_HOST = _env("SMTP_HOST", "") or ""
+    SMTP_PORT = _int("SMTP_PORT", 587)
+    SMTP_USER = _env("SMTP_USER", "") or ""
+    SMTP_PASSWORD = _env("SMTP_PASSWORD", "") or ""
+    SMTP_FROM = _env("SMTP_FROM", "") or ""
+    SMTP_USE_TLS = (_env("SMTP_USE_TLS", "1") or "1") == "1"
+    NOTIFY_TO = _env("NOTIFY_TO", "") or ""
+
     # Session
     SESSION_TYPE = "filesystem"
     SESSION_FILE_DIR = str(BASE_DIR / "db" / "sessions")
