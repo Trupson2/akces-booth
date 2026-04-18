@@ -28,6 +28,10 @@ enum AppState {
 
   /// "Dziekujemy" (3s) -> idle.
   thankYou,
+
+  /// Cos poszlo nie tak - pokazuje ErrorScreen z opcja "Sprobuj ponownie".
+  /// Sesja 8a: timeouty per-state + fallbacki.
+  error,
 }
 
 extension AppStateX on AppState {

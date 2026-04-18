@@ -12,6 +12,7 @@ import 'package:shelf_router/shelf_router.dart';
 import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import 'logger.dart';
 import 'wire_protocol.dart';
 
 /// Lokalny HTTP + WebSocket serwer na Tab A11+.
@@ -47,6 +48,10 @@ class LocalServer extends ChangeNotifier {
   void Function(String path)? onVideoReceived;
   void Function(String message)? onRemoteError;
 
+  /// Map short_id -> sciezka lokalnego pliku. Serwujemy to pod /local/<id>
+  /// jako fallback gdy upload do RPi niedostepny (Sesja 8a Block 3).
+  final Map<String, String> _localVideos = {};
+
   bool get isRunning => _server != null;
   bool get isRecorderConnected => _recorderChannel != null;
   String? get localIp => _localIp;
@@ -54,6 +59,25 @@ class LocalServer extends ChangeNotifier {
   String get webSocketUrl =>
       'ws://${_localIp ?? "0.0.0.0"}:$port/ws';
   String get uploadUrl => 'http://${_localIp ?? "0.0.0.0"}:$port/upload';
+
+  /// Publiczny URL do pobrania lokalnego filmu (do QR gdy offline).
+  String localVideoUrl(String shortId) =>
+      'http://${_localIp ?? "0.0.0.0"}:$port/local/$shortId';
+
+  /// Zarejestruj plik do lokalnego serwowania - wywolywane przez state machine
+  /// gdy upload do backendu fail i trzeba wygenerowac QR z lokalnym URL.
+  void registerLocalVideo(String shortId, String filePath) {
+    _localVideos[shortId] = filePath;
+    Log.i('LocalServer', 'registered local video $shortId -> $filePath');
+  }
+
+  /// Wyczysc lokalny plik po udanym upload do backendu (oszczedzanie miejsca).
+  void unregisterLocalVideo(String shortId) {
+    final removed = _localVideos.remove(shortId);
+    if (removed != null) {
+      Log.d('LocalServer', 'unregistered local video $shortId');
+    }
+  }
 
   Future<void> start() async {
     if (_server != null) return;
@@ -64,7 +88,8 @@ class LocalServer extends ChangeNotifier {
       final router = Router()
         ..get('/health', _handleHealth)
         ..get('/ws', webSocketHandler(_handleSocket))
-        ..post('/upload', _handleUpload);
+        ..post('/upload', _handleUpload)
+        ..get('/local/<short_id>', _handleLocalVideo);
 
       _server = await shelf_io.serve(
         router.call,
@@ -207,6 +232,39 @@ class LocalServer extends ChangeNotifier {
       ch.sink.add(jsonEncode(message));
     } catch (e) {
       debugPrint('[LocalServer] send error: $e');
+    }
+  }
+
+  /// GET /local/<short_id> - serwuje film bezposrednio z Tabu (offline fallback).
+  /// Uzywane gdy RPi niedostepny - gosc pobiera film lokalnie. QR linkuje tutaj.
+  Future<Response> _handleLocalVideo(Request req, String shortId) async {
+    final path = _localVideos[shortId];
+    if (path == null) {
+      Log.w('LocalServer', 'local video not found: $shortId');
+      return Response.notFound('Film nie znaleziony');
+    }
+    final file = File(path);
+    if (!await file.exists()) {
+      Log.w('LocalServer', 'local video file missing: $path');
+      _localVideos.remove(shortId);
+      return Response.notFound('Plik nie istnieje');
+    }
+    try {
+      final bytes = await file.readAsBytes();
+      Log.d('LocalServer', 'serving local $shortId (${bytes.length}B)');
+      return Response.ok(
+        bytes,
+        headers: {
+          'Content-Type': 'video/mp4',
+          'Content-Length': bytes.length.toString(),
+          'Content-Disposition':
+              'attachment; filename="akces-booth-$shortId.mp4"',
+          'Cache-Control': 'no-cache',
+        },
+      );
+    } catch (e) {
+      Log.e('LocalServer', 'local serve error', error: e);
+      return Response.internalServerError(body: 'read failed');
     }
   }
 

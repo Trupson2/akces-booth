@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'models/app_state.dart';
+import 'screens/error_screen.dart';
 import 'screens/idle_screen.dart';
 import 'screens/pin_setup_screen.dart';
 import 'screens/preview_screen.dart';
@@ -90,6 +91,8 @@ class _Router extends StatelessWidget {
         return const QrDisplayScreen();
       case AppState.thankYou:
         return const ThankYouScreen();
+      case AppState.error:
+        return const ErrorScreen();
     }
   }
 }

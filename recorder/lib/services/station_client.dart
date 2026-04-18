@@ -62,12 +62,22 @@ class StationClient extends ChangeNotifier {
   StreamSubscription<dynamic>? _sub;
   Timer? _reconnectTimer;
   Timer? _pingTimer;
+  Timer? _statusTimer;
 
   StationConnState _state = StationConnState.disconnected;
   String? _ip;
   int _port = 8080;
   String? _lastError;
   bool _autoReconnect = true;
+
+  // Exponential backoff: 1, 2, 5, 10, 30, 30... (sekundy)
+  // Zaczyna od 0 i inkrementuje przy kazdej nieudanej probie.
+  static const List<int> _backoffSecondsSchedule = [1, 2, 5, 10, 30];
+  int _reconnectAttempts = 0;
+
+  /// Ostatnio zaraportowany przez OS status baterii/dysku - cache.
+  int? _lastBatteryPct;
+  double? _lastDiskFreeGb;
 
   /// Callback: Station prosi o start nagrywania.
   void Function()? onStartRequested;
@@ -154,6 +164,7 @@ class StationClient extends ChangeNotifier {
       );
 
       _setState(StationConnState.connected);
+      _reconnectAttempts = 0;
       debugPrint('[StationClient] Connected $wsUrl');
 
       // Ping co 20s zeby wykryc zerwane polaczenie.
@@ -161,6 +172,14 @@ class StationClient extends ChangeNotifier {
       _pingTimer = Timer.periodic(const Duration(seconds: 20), (_) {
         send({'type': WireMsg.ping});
       });
+
+      // Status push co 30s (bateria/dysk) - Station pokazuje w debug panelu.
+      _statusTimer?.cancel();
+      _statusTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+        _pushStatus();
+      });
+      // I od razu pierwszy push.
+      unawaited(_pushStatus());
     } catch (e) {
       debugPrint('[StationClient] connect fail: $e');
       _lastError = e.toString();
@@ -169,12 +188,43 @@ class StationClient extends ChangeNotifier {
     }
   }
 
+  /// Wysle recorder_status - bateria i wolny dysk.
+  /// Na Android potrzebujemy platform channel dla baterii, na razie
+  /// podajemy null jesli niedostepne (Station pokazuje "-").
+  Future<void> _pushStatus() async {
+    try {
+      final battery = await _probeBatteryPct();
+      final disk = await _probeDiskFreeGb();
+      _lastBatteryPct = battery;
+      _lastDiskFreeGb = disk;
+      send({
+        'type': WireMsg.recorderStatus,
+        if (battery != null) 'battery': battery,
+        if (disk != null) 'disk_free_gb': disk,
+      });
+    } catch (e) {
+      debugPrint('[StationClient] _pushStatus err: $e');
+    }
+  }
+
+  /// Placeholder - battery_plus package moze to dostarczyc pozniej.
+  /// Na razie zwraca null (Station wyswietli "-").
+  Future<int?> _probeBatteryPct() async => _lastBatteryPct;
+
+  /// Probe wolnego miejsca na docs directory. Fallback do null.
+  Future<double?> _probeDiskFreeGb() async {
+    // Placeholder - pozniej moze dsk_free albo platform channel.
+    return _lastDiskFreeGb;
+  }
+
   Future<void> disconnect({bool keepAutoReconnect = false}) async {
     _autoReconnect = keepAutoReconnect;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
     _pingTimer?.cancel();
     _pingTimer = null;
+    _statusTimer?.cancel();
+    _statusTimer = null;
     await _sub?.cancel();
     _sub = null;
     await _channel?.sink.close();
@@ -188,6 +238,8 @@ class StationClient extends ChangeNotifier {
     _sub = null;
     _pingTimer?.cancel();
     _pingTimer = null;
+    _statusTimer?.cancel();
+    _statusTimer = null;
     _setState(StationConnState.disconnected);
     if (_autoReconnect) _scheduleReconnect();
   }
@@ -195,8 +247,13 @@ class StationClient extends ChangeNotifier {
   void _scheduleReconnect() {
     _reconnectTimer?.cancel();
     if (!_autoReconnect) return;
-    _reconnectTimer = Timer(const Duration(seconds: 5), () {
-      debugPrint('[StationClient] Reconnecting...');
+    // Exponential backoff: 1, 2, 5, 10, 30, 30, 30...
+    final idx = _reconnectAttempts.clamp(0, _backoffSecondsSchedule.length - 1);
+    final delay = Duration(seconds: _backoffSecondsSchedule[idx]);
+    _reconnectAttempts++;
+    debugPrint('[StationClient] Reconnect #$_reconnectAttempts '
+        'za ${delay.inSeconds}s');
+    _reconnectTimer = Timer(delay, () {
       connect();
     });
   }

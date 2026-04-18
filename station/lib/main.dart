@@ -7,8 +7,10 @@ import 'services/app_state_machine.dart';
 import 'services/backend_client.dart';
 import 'services/event_manager.dart';
 import 'services/local_server.dart';
+import 'services/logger.dart';
 import 'services/mock_services.dart';
 import 'services/motor_controller.dart';
+import 'services/pending_uploads.dart';
 import 'services/pin_service.dart';
 import 'services/settings_store.dart';
 
@@ -19,24 +21,30 @@ Future<void> main() async {
     DeviceOrientation.landscapeRight,
   ]);
 
+  // Logger najpierw - pozostale serwisy zapisza wszystko od startu.
+  await Log.init();
+  Log.i('Station', 'boot start');
+
   // Local server startujemy z gorki, zeby Recorder mogl sie polaczyc od razu.
   final server = LocalServer();
   unawaitedStart(server);
 
   final backend = BackendClient();
   final eventManager = EventManager(backend: backend, server: server);
+  final pendingUploads = PendingUploadsService(backend: backend);
 
   final stateMachine = AppStateMachine(
     server: server,
     backend: backend,
     eventManager: eventManager,
+    pendingUploads: pendingUploads,
   )..attachServer();
 
   // PIN + lokalne preferencje Settings - ladujemy z diska przed runApp,
   // zeby router mogl od razu zdecydowac czy pokazac PinSetupScreen.
   final pin = PinService();
   final settings = SettingsStore();
-  await Future.wait([pin.load(), settings.load()]);
+  await Future.wait([pin.load(), settings.load(), pendingUploads.load()]);
 
   // Event manager start (async - loads config, first sync, starts polling).
   unawaitedStartEvents(eventManager);
@@ -56,6 +64,8 @@ Future<void> main() async {
         ),
         ChangeNotifierProvider<PinService>.value(value: pin),
         ChangeNotifierProvider<SettingsStore>.value(value: settings),
+        ChangeNotifierProvider<PendingUploadsService>.value(value: pendingUploads),
+        ChangeNotifierProvider<BoothLogger>.value(value: Log),
       ],
       child: const AkcesBoothStation(),
     ),

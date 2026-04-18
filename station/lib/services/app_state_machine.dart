@@ -7,6 +7,8 @@ import '../models/video_job.dart';
 import 'backend_client.dart';
 import 'event_manager.dart';
 import 'local_server.dart';
+import 'logger.dart';
+import 'pending_uploads.dart';
 import 'wire_protocol.dart';
 
 /// Centralny state controller - decyduje ktory ekran jest wyswietlany.
@@ -23,7 +25,12 @@ import 'wire_protocol.dart';
 /// UWAGA dla Sesji 6 (FFmpeg post-processing): NIE dodawac logo overlayu
 /// "Akces 360" na finalnym filmie - decyzja Adriana 17.04.2026.
 class AppStateMachine extends ChangeNotifier {
-  AppStateMachine({this.server, this.backend, this.eventManager});
+  AppStateMachine({
+    this.server,
+    this.backend,
+    this.eventManager,
+    this.pendingUploads,
+  });
 
   /// Ustawiany przez main.dart po starcie serwera.
   final LocalServer? server;
@@ -34,11 +41,19 @@ class AppStateMachine extends ChangeNotifier {
   /// Event manager - licznik filmow + config.
   final EventManager? eventManager;
 
+  /// Kolejka pending uploads (offline fallback, Sesja 8a Block 3).
+  final PendingUploadsService? pendingUploads;
+
   AppState _state = AppState.idle;
   VideoJob? _currentJob;
   double _progress = 0.0;
   int _videoCount = 0;
   int _qrCountdownSeconds = 0;
+
+  /// Informacja o bledzie - pokazywana na ErrorScreen.
+  String _errorTitle = '';
+  String _errorMessage = '';
+  AppState _errorFrom = AppState.idle;
 
   Timer? _autoAdvance;
   Timer? _progressTicker;
@@ -52,14 +67,27 @@ class AppStateMachine extends ChangeNotifier {
   static const Duration qrDisplayDuration = Duration(seconds: 60);
   static const Duration thankYouDuration = Duration(seconds: 3);
 
-  /// Maksymalny czas na cykl Recording->Preview (bezpiecznik na zawieszenie).
-  static const Duration recorderTimeout = Duration(seconds: 60);
+  // Sesja 8a: per-state maksymalne czasy (bezpiecznik na zawieszenie Recordera,
+  // FFmpeg, transferu, uploadu). Po ich przekroczeniu -> AppState.error.
+  //
+  // Bardzo hojne wartosci zeby nie wyrzucac uzytkownika przy chwilowym lagu,
+  // ale krotsze niz "30 min wisi PROCESSING i nikt nie wie co sie dzieje".
+  static const Duration recordingMaxDuration = Duration(seconds: 20);    // 8s + 12s bufora
+  static const Duration processingMaxDuration = Duration(seconds: 45);   // Snapdragon 8 Elite robi <15s
+  static const Duration transferMaxDuration = Duration(seconds: 90);     // 40MB na WiFi
+  static const Duration uploadingMaxDuration = Duration(minutes: 5);     // duzy margines dla slabego neta
+
+  /// Legacy alias (nadal uzywany w attachServer handlerach, nie zmieniam).
+  static const Duration recorderTimeout = recordingMaxDuration;
 
   AppState get state => _state;
   VideoJob? get currentJob => _currentJob;
   double get progress => _progress.clamp(0.0, 1.0);
   int get videoCount => _videoCount;
   int get qrCountdownSeconds => _qrCountdownSeconds;
+  String get errorTitle => _errorTitle;
+  String get errorMessage => _errorMessage;
+  AppState get errorFrom => _errorFrom;
 
   /// True jesli mamy zywe polaczenie z Recorder. Inaczej -> mock mode.
   bool get isRealMode => server?.isRecorderConnected ?? false;
@@ -126,8 +154,12 @@ class AppStateMachine extends ChangeNotifier {
       _enter(AppState.preview, fromRemote: true);
     };
     s.onRemoteError = (msg) {
-      debugPrint('[StateMachine] Remote error: $msg');
-      _reset();
+      Log.e('StateMachine', 'Remote error z Recorder: $msg');
+      _enterError(
+        title: 'Blad po stronie fotobudki',
+        message: 'Recorder zaraportowal: $msg',
+        from: _state == AppState.idle ? AppState.recording : _state,
+      );
     };
   }
 
@@ -168,9 +200,15 @@ class AppStateMachine extends ChangeNotifier {
       case AppState.recording:
         if (fromRemote || isRealMode) {
           // Tylko safety timeout - dzialamy reaktywnie z WS.
-          _timeoutGuard = Timer(recorderTimeout, () {
-            debugPrint('[StateMachine] recorder timeout in RECORDING');
-            _reset();
+          _timeoutGuard = Timer(recordingMaxDuration, () {
+            Log.w('StateMachine', 'timeout in RECORDING after '
+                '${recordingMaxDuration.inSeconds}s');
+            _enterError(
+              title: 'Fotobudka nie odpowiada',
+              message: 'Recorder nie przyslal potwierdzenia nagrywania. '
+                  'Sprawdz BT i Wi-Fi fotobudki, potem sprobuj ponownie.',
+              from: AppState.recording,
+            );
           });
         } else {
           _runProgressThen(recordingDuration, AppState.processing);
@@ -179,9 +217,15 @@ class AppStateMachine extends ChangeNotifier {
 
       case AppState.processing:
         if (fromRemote || isRealMode) {
-          _timeoutGuard = Timer(recorderTimeout, () {
-            debugPrint('[StateMachine] recorder timeout in PROCESSING');
-            _reset();
+          _timeoutGuard = Timer(processingMaxDuration, () {
+            Log.w('StateMachine', 'timeout in PROCESSING after '
+                '${processingMaxDuration.inSeconds}s');
+            _enterError(
+              title: 'Przetwarzanie trwa za dlugo',
+              message: 'FFmpeg na Recorderze sie zaciol. '
+                  'Sprobuj ponownie - zwykle trwa to 15-20s.',
+              from: AppState.processing,
+            );
           });
         } else {
           _runProgressThen(processingDuration, AppState.transfer);
@@ -190,9 +234,15 @@ class AppStateMachine extends ChangeNotifier {
 
       case AppState.transfer:
         if (fromRemote || isRealMode) {
-          _timeoutGuard = Timer(recorderTimeout, () {
-            debugPrint('[StateMachine] recorder timeout in TRANSFER');
-            _reset();
+          _timeoutGuard = Timer(transferMaxDuration, () {
+            Log.w('StateMachine', 'timeout in TRANSFER after '
+                '${transferMaxDuration.inSeconds}s');
+            _enterError(
+              title: 'Problem z przeslaniem filmu',
+              message: 'Recorder nie mogl wyslac filmu do Station. '
+                  'Sprawdz Wi-Fi, film moze byc nadal na telefonie.',
+              from: AppState.transfer,
+            );
           });
         } else {
           _runProgressThen(transferDuration, AppState.preview, onComplete: () {
@@ -216,7 +266,29 @@ class AppStateMachine extends ChangeNotifier {
       case AppState.thankYou:
         _autoAdvance = Timer(thankYouDuration, _reset);
         break;
+
+      case AppState.error:
+        // Blokuje auto-reset. Gosc/operator musi kliknac "Sprobuj ponownie"
+        // albo "Anuluj" (powrot do idle).
+        break;
     }
+  }
+
+  /// Przejscie do stanu bledu. Zatrzymuje wszystko, pokazuje ErrorScreen.
+  /// `from` zapamietany do retry - np. z error po UPLOADING
+  /// kliknac "Sprobuj" wraca do UPLOADING (a nie do IDLE).
+  void _enterError({
+    required String title,
+    required String message,
+    required AppState from,
+  }) {
+    _cancelAllTimers();
+    _errorTitle = title;
+    _errorMessage = message;
+    _errorFrom = from;
+    _state = AppState.error;
+    Log.e('StateMachine', '$title (from ${from.name}): $message');
+    notifyListeners();
   }
 
   void _runProgressThen(Duration total, AppState next,
@@ -276,9 +348,15 @@ class AppStateMachine extends ChangeNotifier {
       return;
     }
 
-    _timeoutGuard = Timer(const Duration(minutes: 3), () {
-      debugPrint('[StateMachine] upload timeout');
-      _reset();
+    _timeoutGuard = Timer(uploadingMaxDuration, () {
+      Log.w('StateMachine', 'upload timeout after '
+          '${uploadingMaxDuration.inSeconds}s');
+      _enterError(
+        title: 'Upload filmu nie powiodl sie',
+        message: 'Serwer booth.akces360.pl nie odpowiada. '
+            'Mozemy sprobowac ponownie - film jest zapisany lokalnie.',
+        from: AppState.uploading,
+      );
     });
 
     final result = await be.uploadVideo(
@@ -293,10 +371,12 @@ class AppStateMachine extends ChangeNotifier {
     _timeoutGuard?.cancel();
     _timeoutGuard = null;
 
+    // Juz w stanie error (timeout) - nie nadpisuj.
+    if (_state == AppState.error) return;
+
     if (result == null) {
-      debugPrint('[StateMachine] upload failed - fallback mock');
-      _currentJob = _currentJob?.asUploaded();
-      _enter(AppState.qrDisplay);
+      Log.w('StateMachine', 'upload returned null - offline fallback');
+      await _fallbackToLocalServe(job);
       return;
     }
 
@@ -309,6 +389,45 @@ class AppStateMachine extends ChangeNotifier {
     // Powiadom event manager (animacja "+1 film!").
     eventManager?.onVideoUploaded();
 
+    _enter(AppState.qrDisplay);
+  }
+
+  /// Offline fallback - gdy backend nie przyjal, generujemy LOKALNY QR URL
+  /// (Station IP) i dokladamy do kolejki pending. W tle PendingUploadsService
+  /// co 45s probuje wyslac - gdy sie uda, plik pojawi sie tez na RPi, ale
+  /// gosc nadal moze uzyc lokalnego URL przez caly event.
+  Future<void> _fallbackToLocalServe(VideoJob job) async {
+    final srv = server;
+    final pu = pendingUploads;
+    final localPath = job.localFilePath;
+
+    if (srv == null || pu == null || localPath == null) {
+      Log.w('StateMachine', 'fallback niemozliwy (srv/pu/path null) - mock QR');
+      _currentJob = _currentJob?.asUploaded();
+      _enter(AppState.qrDisplay);
+      return;
+    }
+
+    // Generuj lokalny short_id (distinguishable od backendowych).
+    final ts = DateTime.now().millisecondsSinceEpoch.toRadixString(36).toUpperCase();
+    final shortId = 'L${ts.substring(ts.length - 5)}';
+
+    srv.registerLocalVideo(shortId, localPath);
+    final localUrl = srv.localVideoUrl(shortId);
+
+    await pu.enqueue(PendingUpload(
+      localShortId: shortId,
+      localFilePath: localPath,
+      publishToFacebook: job.publishToFacebook,
+      createdAt: DateTime.now(),
+    ));
+
+    _currentJob = job.copyWith(
+      shortId: shortId,
+      publicUrl: localUrl,
+    );
+    Log.i('StateMachine', 'offline fallback - QR=$localUrl');
+    eventManager?.onVideoUploaded();
     _enter(AppState.qrDisplay);
   }
 
@@ -358,4 +477,53 @@ class AppStateMachine extends ChangeNotifier {
   }
 
   void debugReset() => _reset();
+
+  /// Sprobuj ponownie z ekranu error.
+  ///
+  /// Decyzja per-stan od ktorego wrocilismy:
+  /// - error z RECORDING/PROCESSING/TRANSFER -> reset do IDLE, gosc klika START ponownie
+  /// - error z UPLOADING -> jesli jest lokalny film, jedziemy ponownie UPLOADING
+  void retryFromError() {
+    if (_state != AppState.error) return;
+    Log.i('StateMachine', 'retry from error (was ${_errorFrom.name})');
+
+    final from = _errorFrom;
+    _errorTitle = '';
+    _errorMessage = '';
+    _errorFrom = AppState.idle;
+
+    switch (from) {
+      case AppState.uploading:
+        if (_currentJob?.localFilePath != null) {
+          _enter(AppState.uploading);
+          return;
+        }
+        _reset();
+        break;
+      case AppState.recording:
+      case AppState.processing:
+      case AppState.transfer:
+      default:
+        _reset();
+        break;
+    }
+  }
+
+  /// Anuluj error, wroc do IDLE (powielanie debugReset ale z czytelna nazwa).
+  void cancelFromError() {
+    if (_state != AppState.error) return;
+    Log.i('StateMachine', 'cancel from error -> idle');
+    _errorTitle = '';
+    _errorMessage = '';
+    _errorFrom = AppState.idle;
+    _reset();
+  }
+
+  /// Programowo wymusz error - wykorzystywane przez zewnetrzne sygnaly
+  /// (np. disconnect WiFi w trakcie cyklu). Public bo moze byc wywolane
+  /// z LocalServer/BackendClient.
+  void reportError(String title, String message) {
+    if (_state == AppState.idle || _state == AppState.error) return;
+    _enterError(title: title, message: message, from: _state);
+  }
 }

@@ -10,6 +10,7 @@ class WireMsg {
   static const ping = 'ping';
 
   // Recorder -> Station
+  static const recorderStatus = 'recorder_status';
   static const recordingStarted = 'recording_started';
   static const recordingProgress = 'recording_progress';
   static const recordingStopped = 'recording_stopped';

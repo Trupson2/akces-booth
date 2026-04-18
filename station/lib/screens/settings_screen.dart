@@ -12,6 +12,7 @@ import '../services/settings_store.dart';
 import '../theme/app_theme.dart';
 import 'backend_setup_screen.dart';
 import 'bt_setup_screen.dart';
+import 'debug_panel_screen.dart';
 import 'pin_entry_screen.dart';
 import 'pin_setup_screen.dart';
 
@@ -116,9 +117,29 @@ class SettingsScreen extends StatelessWidget {
             title: '🛠 DEV',
             children: [
               ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.bug_report_rounded,
+                    color: AppTheme.muted),
+                title: const Text('Debug panel',
+                    style: TextStyle(color: Colors.white, fontSize: 14)),
+                subtitle: const Text(
+                  'logi, pending uploads, statusy polaczen, IP',
+                  style: TextStyle(color: AppTheme.muted, fontSize: 12),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded,
+                    color: AppTheme.muted),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const DebugPanelScreen(),
+                  ),
+                ),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.refresh_rounded,
                     color: AppTheme.muted),
-                title: const Text('Reset state machine (IDLE)'),
+                title: const Text('Reset state machine (IDLE)',
+                    style: TextStyle(color: Colors.white, fontSize: 14)),
                 onTap: () {
                   sm.debugReset();
                   Navigator.of(context).maybePop();
