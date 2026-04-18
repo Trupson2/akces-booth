@@ -32,6 +32,18 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+
+            // Sesja 8a: JNI release crash fix.
+            // ffmpeg_kit_flutter_new + flutter_blue_plus + camera uzywaja JNI
+            // reflection - R8 bez keep rules powoduje FindClassUnchecked crash
+            // na starcie. Wylaczamy minify + shrinking + dodajemy proguard-rules.pro
+            // jako defense-in-depth.
+            isMinifyEnabled = false
+            isShrinkResources = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
