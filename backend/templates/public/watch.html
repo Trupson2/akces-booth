@@ -1,75 +1,488 @@
-{% extends "base.html" %}
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B1220">
+<title>Twój film · Akces Booth</title>
 
-{% block title %}Twoj film - {{ event.name if event else "Akces Booth" }}{% endblock %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-{% block content %}
-<div class="min-h-screen bg-gradient-to-br from-purple-900 via-slate-900 to-black">
-  <div class="max-w-2xl mx-auto px-4 py-6">
-    <div class="text-center mb-6">
-      <h1 class="text-3xl font-black">🎉 Twoj film jest gotowy!</h1>
-      {% if event %}
-        <p class="text-lg text-purple-200 mt-1">{{ event.name }}</p>
-      {% endif %}
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter', 'system-ui', 'sans-serif'],
+          serif: ['"Instrument Serif"', 'serif'],
+          mono: ['"JetBrains Mono"', 'monospace'],
+        },
+        colors: {
+          ink: '#0B1220',
+          ink2: '#111a2e',
+          paper: '#FAF7F2',
+          paper2: '#F1EBE0',
+          orange: { DEFAULT: '#F97316', 400: '#FB923C', 600: '#EA580C' },
+          wa: '#25D366',
+        },
+      },
+    },
+  };
+</script>
+
+<style>
+  html, body { background: #FAF7F2; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: #0F172A;
+  }
+  em, .serif-it {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-weight: 400;
+  }
+  .mono-label {
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 10.5px;
+    font-weight: 500;
+  }
+  ::selection { background: rgba(249,115,22,0.3); }
+
+  /* Warm grain on paper surfaces */
+  .grain::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.05  0 0 0 0 0.05  0 0 0 0 0.05  0 0 0 0.35 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    opacity: 0.5; mix-blend-mode: multiply;
+    pointer-events: none; z-index: 0;
+  }
+
+  /* Confetti dots at top of hero */
+  .confetti-dot {
+    position: absolute; border-radius: 999px;
+    animation: floaty 6s ease-in-out infinite;
+  }
+  @keyframes floaty {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50%      { transform: translateY(-10px) rotate(6deg); }
+  }
+  @keyframes softpulse {
+    0%, 100% { box-shadow: 0 14px 30px -8px rgba(249,115,22,0.55), 0 0 0 0 rgba(249,115,22,0.4); }
+    50%      { box-shadow: 0 14px 30px -8px rgba(249,115,22,0.55), 0 0 0 12px rgba(249,115,22,0); }
+  }
+  .cta-pulse { animation: softpulse 2.4s ease-in-out infinite; }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  /* Native video — hide default poster flash */
+  video { background: #0B1220; }
+  video::-webkit-media-controls-panel {
+    background: linear-gradient(180deg, transparent, rgba(0,0,0,0.65));
+  }
+
+  /* Copy-link flash */
+  .flash {
+    transition: all 0.25s ease;
+  }
+  .flash.ok {
+    background: #dcfce7 !important;
+    border-color: #86efac !important;
+    color: #15803d !important;
+  }
+
+  /* Hairline divider with label */
+  .rule {
+    position: relative; text-align: center;
+  }
+  .rule::before, .rule::after {
+    content: ''; position: absolute; top: 50%; width: calc(50% - 40px);
+    height: 1px; background: rgba(15,23,42,0.12);
+  }
+  .rule::before { left: 0; }
+  .rule::after  { right: 0; }
+
+  /* Respect notch area */
+  .safe-top { padding-top: max(env(safe-area-inset-top), 0px); }
+  .safe-bot { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
+
+  /* Button press */
+  button:active, a:active { transform: scale(0.985); }
+  button, a { transition: transform 0.08s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
+
+  /* Dotted pattern behind brand logo */
+  .dotgrid {
+    background-image: radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px);
+    background-size: 14px 14px;
+  }
+</style>
+</head>
+
+<body class="min-h-screen antialiased">
+
+<!-- ──────────────────────────── HERO ──────────────────────────── -->
+<header class="relative overflow-hidden bg-ink text-white safe-top">
+  <!-- glow + grid -->
+  <div class="pointer-events-none absolute -top-32 left-1/2 -translate-x-1/2 w-[560px] h-[560px] rounded-full"
+       style="background: radial-gradient(circle, rgba(249,115,22,0.28) 0%, rgba(249,115,22,0) 62%);"></div>
+  <div class="pointer-events-none absolute inset-0 opacity-[0.55]"
+       style="background-image: linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px); background-size: 48px 48px; mask-image: radial-gradient(circle at 50% 0%, #000 30%, transparent 75%); -webkit-mask-image: radial-gradient(circle at 50% 0%, #000 30%, transparent 75%);"></div>
+
+  <!-- Confetti dots -->
+  <span class="confetti-dot" style="top:18%; left:12%; width:6px; height:6px; background:#FB923C; animation-delay:.0s"></span>
+  <span class="confetti-dot" style="top:30%; left:84%; width:8px; height:8px; background:#FDE68A; animation-delay:.6s"></span>
+  <span class="confetti-dot" style="top:58%; left:18%; width:5px; height:5px; background:#A7F3D0; animation-delay:1.1s"></span>
+  <span class="confetti-dot" style="top:22%; left:68%; width:4px; height:4px; background:#C4B5FD; animation-delay:1.8s"></span>
+  <span class="confetti-dot" style="top:68%; left:82%; width:7px; height:7px; background:#F97316; animation-delay:2.2s"></span>
+  <span class="confetti-dot" style="top:74%; left:42%; width:4px; height:4px; background:#fff; opacity:.5; animation-delay:.9s"></span>
+
+  <!-- Tiny brand row -->
+  <div class="relative z-10 flex items-center justify-between px-5 pt-5">
+    <div class="flex items-center gap-2">
+      <div class="w-7 h-7 rounded-lg grid place-items-center font-serif italic text-white text-lg"
+           style="background: linear-gradient(135deg, #F97316 0%, #FB923C 100%);">a</div>
+      <div class="text-[13.5px] font-semibold tracking-tight">Akces Booth</div>
+    </div>
+    <a href="/polityka-prywatnosci" class="mono-label text-white/45 hover:text-white/70">Prywatność</a>
+  </div>
+
+  <!-- Headline -->
+  <div class="relative z-10 px-5 pt-8 pb-7 text-center">
+    <div class="mono-label text-orange-400 mb-3 inline-flex items-center gap-2">
+      <span class="w-1.5 h-1.5 rounded-full bg-orange" style="box-shadow: 0 0 10px #F97316;"></span>
+      Nagranie #{{ video.short_id }}
+    </div>
+    <h1 class="font-sans font-bold tracking-tight leading-[1.02] text-[40px] sm:text-[52px]"
+        style="letter-spacing: -0.035em; text-wrap: balance;">
+      Twój film jest <span class="serif-it text-orange-400">gotowy.</span>
+    </h1>
+    <p class="mt-4 text-white/75 text-[15.5px] leading-snug max-w-sm mx-auto" style="text-wrap: pretty;">
+      <span class="text-white font-medium">{{ event.name }}</span><br>
+      <span class="text-white/55">{{ event.date_human }}</span>
+    </p>
+    <p class="mt-5 mono-label text-white/40">
+      Nagrane przez&nbsp;·&nbsp;Akces&nbsp;Booth&nbsp;360°
+    </p>
+  </div>
+</header>
+
+<!-- ──────────────────────── VIDEO + CTA AREA ─────────────────────── -->
+<main class="relative bg-paper">
+  <!-- subtle paper tone change at top (transition from dark hero) -->
+  <div class="absolute top-0 inset-x-0 h-16 pointer-events-none"
+       style="background: linear-gradient(180deg, rgba(11,18,32,0.12) 0%, transparent 100%);"></div>
+
+  <section class="relative max-w-[720px] mx-auto px-5 pt-7 pb-10">
+
+    <!-- VIDEO PLAYER WRAP — 9:16 vertical with blurred bg, Stories-style -->
+    <div class="relative">
+      <!-- decorative tape "label" -->
+      <div class="absolute -top-3 left-5 z-20 bg-paper2 px-2.5 py-1 rounded border border-black/5 shadow-sm rotate-[-2deg] flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+        <span class="mono-label text-ink/70">REC · 00:22</span>
+      </div>
+
+      <div class="relative rounded-[24px] overflow-hidden shadow-[0_30px_70px_-20px_rgba(11,18,32,0.35),0_10px_20px_-10px_rgba(11,18,32,0.15)] border border-black/5 bg-ink">
+        <!-- Blurred back-layer filling the 16:9 area -->
+        <div class="absolute inset-0" style="
+          background:
+            radial-gradient(circle at 30% 30%, rgba(251,146,60,0.35) 0%, transparent 55%),
+            radial-gradient(circle at 75% 70%, rgba(79,70,229,0.35) 0%, transparent 60%),
+            linear-gradient(180deg, #1a2544 0%, #0B1220 100%);
+          filter: blur(28px) saturate(1.2);
+          transform: scale(1.2);
+        "></div>
+
+        <div class="relative aspect-video flex items-center justify-center">
+          <!-- 9:16 video, centered -->
+          <div class="relative h-full" style="aspect-ratio: 9 / 16;">
+            <video
+              id="v"
+              class="block w-full h-full object-cover bg-ink"
+              data-src="/api/videos/{{ video.short_id }}/stream"
+              autoplay loop muted playsinline controls
+              preload="metadata"
+              webkit-playsinline>
+            </video>
+
+            <!-- Tiny vertical-format badge, top-right of the 9:16 area -->
+            <div class="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-black/45 backdrop-blur-sm">
+              <span class="mono-label text-white/85">9:16</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- very subtle bottom vignette for controls readability -->
+        <div class="pointer-events-none absolute inset-x-0 bottom-0 h-24"
+             style="background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.35) 100%);"></div>
+      </div>
+
+      <!-- under-video meta row -->
+      <div class="mt-3 flex items-center justify-between px-1">
+        <div class="flex items-center gap-2 text-ink/55 text-[12.5px]">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 4.5C1 3.12 2.12 2 3.5 2h7C11.88 2 13 3.12 13 4.5v5c0 1.38-1.12 2.5-2.5 2.5h-7C2.12 12 1 10.88 1 9.5v-5Z" stroke="currentColor" stroke-width="1.3"/><path d="M9 7L6 5.5v3L9 7Z" fill="currentColor"/></svg>
+          <span>MP4 · 1080×1920 · 00:22</span>
+        </div>
+        <div class="text-ink/40 mono-label">~38&nbsp;MB</div>
+      </div>
     </div>
 
-    <div class="bg-black rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10">
-      <video controls autoplay loop playsinline class="w-full max-h-[60vh] object-contain bg-black">
-        <source src="/api/videos/{{ video.short_id }}/stream" type="video/mp4">
-        Twoja przegladarka nie obsluguje video HTML5.
-      </video>
-    </div>
+    <!-- ── PRIMARY CTA ── -->
+    <a href="/api/videos/{{ video.short_id }}/download"
+       download="akces-booth-{{ video.short_id }}.mp4"
+       class="cta-pulse mt-7 flex items-center justify-center gap-3 w-full rounded-2xl text-white font-semibold text-[17px] h-[62px] px-6"
+       style="background: linear-gradient(180deg, #FB923C 0%, #F97316 100%); letter-spacing: -0.01em;">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <path d="M11 3v12m0 0l-5-5m5 5l5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4 18h14" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      Pobierz na telefon
+    </a>
+    <p class="mt-2.5 text-center text-ink/50 text-[13px] leading-snug">
+      mp4, ~38 MB — <span class="serif-it text-ink/80">gotowy</span> do wrzucenia na Insta, TikToka, Stories
+    </p>
 
-    <div class="mt-6 flex flex-col gap-3">
-      <a href="/api/videos/{{ video.short_id }}/download"
-         class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold
-                py-4 rounded-xl text-center text-lg transition">
-        ⬇ Pobierz film
-      </a>
+    <!-- ── SHARE ROW ── -->
+    <div class="mt-7">
+      <div class="rule mono-label text-ink/40 mb-4">Pochwal się</div>
 
-      <div class="grid grid-cols-3 gap-2">
-        <button onclick="shareTo('whatsapp')"
-                class="bg-green-600 hover:bg-green-700 py-3 rounded-xl font-semibold transition">
-          WhatsApp
+      <div class="grid grid-cols-3 gap-2.5">
+        <!-- WhatsApp -->
+        <a id="btn-wa"
+           href="#"
+           class="flex flex-col items-center justify-center gap-1.5 h-[78px] rounded-2xl text-white"
+           style="background: #25D366;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M17.5 14.4c-.3-.15-1.77-.87-2.04-.97-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.9-.8-1.5-1.78-1.67-2.08-.17-.3-.02-.47.13-.62.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.5l-.57-.01c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48 0 1.47 1.07 2.88 1.22 3.08.15.2 2.1 3.2 5.08 4.48.71.3 1.26.5 1.7.63.72.23 1.37.2 1.88.12.57-.08 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.13-.27-.2-.57-.35ZM12.05 21.8a9.8 9.8 0 0 1-5-1.37l-3.58.94.95-3.5A9.8 9.8 0 1 1 12.05 21.8Zm8.35-18.15A11.76 11.76 0 0 0 3.06 17.68L2 22l4.46-1.03a11.76 11.76 0 0 0 5.6 1.42h.01a11.76 11.76 0 0 0 8.33-20.19Z"/>
+          </svg>
+          <span class="text-[12px] font-semibold tracking-tight">WhatsApp</span>
+        </a>
+
+        <!-- Copy link -->
+        <button id="btn-copy"
+                class="flash flex flex-col items-center justify-center gap-1.5 h-[78px] rounded-2xl border text-ink"
+                style="background: #fff; border-color: rgba(15,23,42,0.12);">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M10.5 13.5a3 3 0 0 0 4.24 0l3-3a3 3 0 1 0-4.24-4.24l-1.06 1.06" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            <path d="M13.5 10.5a3 3 0 0 0-4.24 0l-3 3a3 3 0 1 0 4.24 4.24l1.06-1.06" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          <span id="btn-copy-label" class="text-[12px] font-semibold tracking-tight">Kopiuj link</span>
         </button>
-        <button onclick="shareTo('copy')"
-                class="bg-slate-700 hover:bg-slate-600 py-3 rounded-xl font-semibold transition">
-          Kopiuj link
-        </button>
-        <button onclick="shareTo('native')"
-                class="bg-purple-600 hover:bg-purple-700 py-3 rounded-xl font-semibold transition">
-          Udostepnij
+
+        <!-- Native share -->
+        <button id="btn-share"
+                class="flex flex-col items-center justify-center gap-1.5 h-[78px] rounded-2xl border-2 text-orange"
+                style="background: rgba(249,115,22,0.06); border-color: rgba(249,115,22,0.35); color: #EA580C;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M12 15V4m0 0L8 8m4-4l4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M5 13v4a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+          </svg>
+          <span class="text-[12px] font-semibold tracking-tight">Udostępnij</span>
         </button>
       </div>
     </div>
 
-    <div class="mt-12 text-center border-t border-white/10 pt-8">
-      <p class="text-purple-200">Podobala Ci sie fotobudka?</p>
-      <p class="font-bold text-xl mt-2">Zamow Akces 360 na swoj event!</p>
-      <a href="https://akces360.pl"
-         class="bg-white text-black px-6 py-3 rounded-lg mt-3 inline-block
-                font-bold hover:bg-slate-100 transition">
-        akces360.pl
-      </a>
+    {% if event and event.access_key %}
+    <!-- ── GALLERY LINK (conditional) ── -->
+    <a href="/e/{{ event.access_key }}"
+       class="mt-5 group flex items-center justify-between rounded-2xl border px-4 py-4"
+       style="background: #fff; border-color: rgba(15,23,42,0.1);">
+      <div class="flex items-center gap-3.5 min-w-0">
+        <!-- tiled thumbs -->
+        <div class="relative flex -space-x-2 flex-shrink-0">
+          <div class="w-9 h-9 rounded-lg border-2 border-white" style="background: linear-gradient(135deg,#F97316,#FB923C);"></div>
+          <div class="w-9 h-9 rounded-lg border-2 border-white" style="background: linear-gradient(135deg,#4F46E5,#A78BFA);"></div>
+          <div class="w-9 h-9 rounded-lg border-2 border-white grid place-items-center text-[11px] font-semibold text-ink/70"
+               style="background: #F1EBE0;">+{{ event.video_count|default(12) }}</div>
+        </div>
+        <div class="min-w-0">
+          <div class="text-[14px] font-semibold text-ink tracking-tight">Wszystkie filmy z tego eventu</div>
+          <div class="text-[12.5px] text-ink/55 truncate">{{ event.name }}</div>
+        </div>
+      </div>
+      <svg class="flex-shrink-0 text-ink/50 group-hover:text-orange" width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <path d="M6 3l6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </a>
+    {% endif %}
+
+  </section>
+
+  <!-- ──────────────────── BRAND CARD (DARK) ──────────────────── -->
+  <section class="px-5 pb-10">
+    <div class="relative max-w-[720px] mx-auto overflow-hidden rounded-[28px] bg-ink text-white p-7 sm:p-10"
+         style="box-shadow: 0 30px 70px -20px rgba(11,18,32,0.35);">
+
+      <!-- decorative dotgrid + glow -->
+      <div class="absolute inset-0 dotgrid opacity-60 pointer-events-none"></div>
+      <div class="pointer-events-none absolute -top-24 -right-24 w-[360px] h-[360px] rounded-full"
+           style="background: radial-gradient(circle, rgba(249,115,22,0.28) 0%, rgba(249,115,22,0) 65%);"></div>
+      <div class="pointer-events-none absolute -bottom-32 -left-24 w-[320px] h-[320px] rounded-full"
+           style="background: radial-gradient(circle, rgba(79,70,229,0.25) 0%, rgba(79,70,229,0) 65%);"></div>
+
+      <div class="relative">
+        <div class="mono-label text-orange-400 mb-4 inline-flex items-center gap-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-orange" style="box-shadow: 0 0 10px #F97316;"></span>
+          Planujesz swój event?
+        </div>
+
+        <h2 class="font-sans font-bold tracking-tight text-[28px] sm:text-[36px] leading-[1.08]"
+            style="letter-spacing: -0.03em; text-wrap: balance;">
+          Spodobała Ci się <span class="serif-it text-orange-400">takie</span> nagranie?
+        </h2>
+
+        <p class="mt-5 text-white/75 text-[15px] leading-relaxed max-w-lg" style="text-wrap: pretty;">
+          Akces Booth to <span class="serif-it text-white">polska</span> alternatywa dla zagranicznych apek —
+          <span class="serif-it text-white">rodzinna</span> firma z Mieszkowic, własny branding,
+          polski support. Obsługujemy eventy w Zachodniopomorskim
+          i sąsiednich województwach.
+        </p>
+
+        <!-- mini stat strip -->
+        <div class="mt-6 flex flex-wrap gap-x-6 gap-y-3 text-white/70 text-[13px]">
+          <div class="flex items-center gap-2">
+            <span class="w-1 h-1 rounded-full bg-orange-400"></span>
+            <span>Wesela · urodziny · firmówki</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-1 h-1 rounded-full bg-orange-400"></span>
+            <span>Dojazd w promieniu 200 km</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-1 h-1 rounded-full bg-orange-400"></span>
+            <span>Filmy gotowe tego samego dnia</span>
+          </div>
+        </div>
+
+        <!-- CTA buttons -->
+        <div class="mt-7 flex flex-col sm:flex-row gap-3">
+          <a href="https://akces360.pl"
+             class="inline-flex items-center justify-center gap-2 h-[54px] px-6 rounded-xl font-semibold text-[15px] text-white"
+             style="background: #F97316; box-shadow: 0 8px 22px -6px rgba(249,115,22,0.6);">
+            Zobacz ofertę
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10m0 0L9 4m4 4l-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+          <a href="/early-access/"
+             class="inline-flex items-center justify-center gap-2 h-[54px] px-6 rounded-xl font-medium text-[14px] text-white/80 border"
+             style="background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.14);">
+            Jesteś fotobudkarzem? Early access
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10m0 0L9 4m4 4l-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+        </div>
+      </div>
     </div>
+  </section>
+
+  <!-- ──────────────────── FOOTER ──────────────────── -->
+  <footer class="px-5 pb-10 safe-bot">
+    <div class="max-w-[720px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-[12px] text-ink/50">
+      <div class="text-center sm:text-left">
+        Akces Booth · Akces 360 · Andrzej Gauza (JDG) · Mieszkowice
+      </div>
+      <a href="/polityka-prywatnosci" class="hover:text-orange">Polityka prywatności</a>
+    </div>
+  </footer>
+</main>
+
+<!-- ─────────────────────── TOAST ─────────────────────── -->
+<div id="toast"
+     class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 transition-opacity duration-200">
+  <div class="px-4 py-3 rounded-xl bg-ink text-white text-[13.5px] font-medium shadow-2xl flex items-center gap-2">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span id="toast-msg">Link skopiowany</span>
   </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
 <script>
-  const pageUrl = "{{ public_base }}/v/{{ video.short_id }}";
-  function shareTo(target) {
-    if (target === 'whatsapp') {
-      window.open(`https://wa.me/?text=${encodeURIComponent(pageUrl)}`, '_blank');
-    } else if (target === 'copy') {
-      navigator.clipboard?.writeText(pageUrl).then(() => alert('Skopiowano!'));
-    } else if (target === 'native') {
-      if (navigator.share) {
-        navigator.share({ url: pageUrl, title: 'Moj film z fotobudki' });
-      } else {
-        alert('Udostepnianie nieobslugiwane - uzyj "Kopiuj link".');
-      }
+  // ── Dynamic values (server-rendered via Jinja | tojson) ──────────
+  const SHORT_ID = {{ video.short_id | tojson }};
+  const EVENT_NAME_RAW = {{ (event.name if event else 'Akces Booth') | tojson }};
+  const WATCH_URL = window.location.href;
+  const DOWNLOAD_URL = `/api/videos/${SHORT_ID}/download`;
+
+  const shareText = `Zobacz mój film z ${EVENT_NAME_RAW} 🎉`;
+
+  // ── WhatsApp ─────────────────────────────────────────────
+  document.getElementById('btn-wa').addEventListener('click', (e) => {
+    e.preventDefault();
+    const url = `https://wa.me/?text=${encodeURIComponent(shareText + "\n" + WATCH_URL)}`;
+    window.open(url, '_blank', 'noopener');
+  });
+
+  // ── Copy link ─────────────────────────────────────────────
+  const copyBtn = document.getElementById('btn-copy');
+  const copyLabel = document.getElementById('btn-copy-label');
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(WATCH_URL);
+    } catch (_) {
+      // fallback
+      const ta = document.createElement('textarea');
+      ta.value = WATCH_URL; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); ta.remove();
     }
+    copyBtn.classList.add('ok');
+    copyLabel.textContent = 'Skopiowano';
+    showToast('Link skopiowany do schowka');
+    setTimeout(() => {
+      copyBtn.classList.remove('ok');
+      copyLabel.textContent = 'Kopiuj link';
+    }, 2200);
+  });
+
+  // ── Native share ─────────────────────────────────────────────
+  const shareBtn = document.getElementById('btn-share');
+  shareBtn.addEventListener('click', async () => {
+    const payload = { title: 'Akces Booth', text: shareText, url: WATCH_URL };
+    if (navigator.share) {
+      try { await navigator.share(payload); } catch (_) { /* user cancelled */ }
+    } else {
+      // fallback: copy link
+      copyBtn.click();
+      showToast('Udostępnianie niedostępne — link skopiowany');
+    }
+  });
+
+  // ── Toast ─────────────────────────────────────────────
+  const toast = document.getElementById('toast');
+  const toastMsg = document.getElementById('toast-msg');
+  let toastTimer = null;
+  function showToast(m) {
+    toastMsg.textContent = m;
+    toast.style.opacity = '1';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 2200);
   }
+
+  // ── Video: promote data-src → src; fallback UI on network/decode error.
+  const v = document.getElementById('v');
+  const dataSrc = v.getAttribute('data-src') || '';
+
+  function showErrorFallback() {
+    const wrap = v.parentElement;
+    wrap.innerHTML = `
+      <div class="w-full h-full flex flex-col items-center justify-center text-center px-6 gap-3"
+           style="background: linear-gradient(180deg,#1a2544,#0B1220);">
+        <div class="w-14 h-14 rounded-full grid place-items-center" style="background: rgba(249,115,22,0.18);">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7L8 5z" fill="#FB923C"/></svg>
+        </div>
+        <div class="text-white/90 text-[14px] font-medium">Nie mogę załadować filmu</div>
+        <div class="text-white/50 text-[12px]">Spróbuj odświeżyć stronę albo pobierz bezpośrednio</div>
+      </div>`;
+  }
+
+  v.setAttribute('src', dataSrc);
+  v.addEventListener('error', showErrorFallback);
 </script>
-{% endblock %}
+
+</body>
+</html>

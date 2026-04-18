@@ -27,13 +27,40 @@ def _resolve_video_path(video: dict) -> Path | None:
     return p if p.exists() else None
 
 
+_POLISH_MONTHS = {
+    1: "stycznia", 2: "lutego", 3: "marca", 4: "kwietnia",
+    5: "maja", 6: "czerwca", 7: "lipca", 8: "sierpnia",
+    9: "września", 10: "października", 11: "listopada", 12: "grudnia",
+}
+
+
+def _humanize_event_date(iso: str | None) -> str:
+    """'2026-07-12' -> '12 lipca 2026'. Zwraca pusty string dla None/bad input."""
+    if not iso:
+        return ""
+    try:
+        from datetime import date
+        d = date.fromisoformat(iso[:10])
+        return f"{d.day} {_POLISH_MONTHS[d.month]} {d.year}"
+    except Exception:
+        return iso
+
+
 @share_bp.route("/v/<short_id>")
 def watch_video(short_id: str):  # type: ignore[no-untyped-def]
     video = models.get_video_by_short_id(Config.DB_PATH, short_id)
     if not video:
         abort(404)
     models.increment_view_count(Config.DB_PATH, video["id"])
-    event = models.get_event(Config.DB_PATH, video["event_id"])
+    event_raw = models.get_event(Config.DB_PATH, video["event_id"])
+    event = None
+    if event_raw:
+        # Rozszerzamy dict o pola wymagane przez template (date_human, video_count).
+        event = dict(event_raw)
+        event["date_human"] = _humanize_event_date(event.get("event_date"))
+        event["video_count"] = len(
+            models.list_videos_for_event(Config.DB_PATH, event["id"])
+        )
     return render_template(
         "public/watch.html",
         video=video,
