@@ -120,25 +120,23 @@ function FounderSection() {
           display: 'grid', gridTemplateColumns: '240px 1fr', gap: 48,
           alignItems: 'start',
         }} className="founder-grid">
-          {/* portrait placeholder */}
+          {/* portret - ilustracja Claude Design (dziadek + wnuk przy fotobudce) */}
           <div>
             <div style={{
               width: 200, height: 260, borderRadius: 16,
-              background: `linear-gradient(135deg, #1E293B 0%, #4F46E5 100%)`,
+              background: 'linear-gradient(180deg, #F5F3ED 0%, #E8E6E0 100%)',
               position: 'relative', overflow: 'hidden',
               border: '1px solid #E8E6E0',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <div style={{
-                position: 'absolute', inset: 0,
-                background: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.04), rgba(255,255,255,0.04) 10px, transparent 10px, transparent 20px)',
-              }} />
-              <div style={{
-                position: 'absolute', bottom: 12, left: 12, right: 12,
-                padding: '8px 10px', background: 'rgba(15,23,42,0.6)',
-                backdropFilter: 'blur(8px)', borderRadius: 8,
-                fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
-                color: 'rgba(255,255,255,0.85)', letterSpacing: '0.05em',
-              }}>zdjęcie: dziadek + wnuk ↗</div>
+              <img
+                src="/early-access/images/founder.png"
+                alt="Ilustracja: dziadek Andrzej + wnuk Adrian przy fotobudce 360°"
+                style={{
+                  width: '100%', height: '100%', objectFit: 'cover',
+                  objectPosition: 'center 60%',
+                }}
+              />
             </div>
             <div style={{
               marginTop: 16, fontFamily: 'Inter, system-ui',
@@ -158,10 +156,10 @@ function FounderSection() {
               fontWeight: 700, lineHeight: 1.15, letterSpacing: '-0.025em',
               margin: '20px 0 24px', color: '#0F172A', textWrap: 'balance',
             }}>
-              „Dziadek prowadzi firmę <em style={{
+              „Dziadek prowadzi firmę od <em style={{
                 fontFamily: 'Instrument Serif, serif', fontStyle: 'italic',
                 fontWeight: 400,
-              }}>od 1999.</em>
+              }}>1999</em>.
               Ja dokładam warstwę softu."
             </h2>
             <div style={{

@@ -21,6 +21,14 @@ Future<void> main() async {
     DeviceOrientation.landscapeRight,
   ]);
 
+  // Kiosk mode - ukrywa pasek statusu (gorny) + nav bar (dolny) zeby gosc
+  // widzial tylko apke. `immersiveSticky`: swipe z brzegu na chwile pokazuje
+  // paski, po chwili znikaja automatycznie. Dla Tab A11+ przy fotobudce =
+  // single-purpose device.
+  await SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.immersiveSticky,
+  );
+
   // Logger najpierw - pozostale serwisy zapisza wszystko od startu.
   await Log.init();
   Log.i('Station', 'boot start');

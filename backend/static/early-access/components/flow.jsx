@@ -30,7 +30,7 @@ function FlowSection() {
             fontFamily: 'Inter, system-ui', fontSize: 17, lineHeight: 1.6,
             color: 'rgba(255,255,255,0.65)', margin: 0, textWrap: 'pretty',
           }}>
-            Tablet obsługuje obsługa. Telefon zostaje gościowi. Bez rejestracji, bez logowań.
+            Tablet trzyma obsługa. Film trafia na telefon gościa. Bez rejestracji, bez logowań.
           </p>
         </div>
 
