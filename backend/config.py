@@ -51,6 +51,10 @@ class Config:
 
     LOG_LEVEL = _env("LOG_LEVEL", "INFO") or "INFO"
 
+    # Rate limiting storage - memory:// dziala tylko w single-worker gunicornie
+    # bo kazdy worker ma wlasny licznik. Z 4 workerami uzyj redis://localhost:6379/0.
+    RATELIMIT_STORAGE_URI = _env("RATELIMIT_STORAGE_URI", "memory://") or "memory://"
+
     # SMTP (notyfikacje signup + wiadomosci systemowe).
     # Gdy SMTP_HOST pusty - notyfikacje sa NO-OP (tylko log info).
     SMTP_HOST = _env("SMTP_HOST", "") or ""

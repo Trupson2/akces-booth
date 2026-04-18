@@ -43,10 +43,10 @@ def create_app() -> Flask:
 
     Session(app)
 
-    # Rate limiting - config Flask-Limiter przez app.config (preferowany
-    # pattern gdy uzywamy init_app; storage_uri w konstruktorze nie zawsze
-    # sie aplikuje). headers_enabled juz ustawione w extensions.py.
-    app.config["RATELIMIT_STORAGE_URI"] = "memory://"
+    # Rate limiting - config Flask-Limiter przez app.config.
+    # Storage URI czytamy z env (Config.RATELIMIT_STORAGE_URI) zeby mogla byc
+    # redis://... w produkcji z multi-worker gunicorn.
+    app.config["RATELIMIT_STORAGE_URI"] = Config.RATELIMIT_STORAGE_URI
     app.config["RATELIMIT_STRATEGY"] = "fixed-window"
     app.config["RATELIMIT_HEADERS_ENABLED"] = True
     limiter.init_app(app)
