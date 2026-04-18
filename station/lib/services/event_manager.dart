@@ -133,8 +133,15 @@ class EventManager extends ChangeNotifier {
       'type': WireMsg.eventConfig,
       'event_id': e.id,
       'event_name': e.name,
+      // Lokalne sciezki Stationa (deprecated - gdy Station=Recorder=to samo
+      // urzadzenie, nadal dzialaja; na dwoch urzadzeniach Recorder ich nie
+      // otworzy). Trzymamy dla backward-compat do czasu gdy wszyscy recorderzy
+      // beda na nowym APK.
       'overlay_path': _cachedOverlayPath,
       'music_path': _cachedMusicPath,
+      // URL-e backendu - Recorder sam pobiera do swojego docs cache.
+      'overlay_url': e.overlayUrl,
+      'music_url': e.musicUrl,
       'music_offset_sec': e.musicOffsetSec,
       'music_offset_mode': e.musicOffsetMode,
       'text_top': e.textTop,

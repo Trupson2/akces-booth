@@ -84,6 +84,11 @@ class VideoProcessor extends ChangeNotifier {
     // zaplanowane 8s - camera init delay, wczesniejszy stop).
     final actualDuration = await _probeDuration(inputPath) ?? config.inputDuration;
 
+    // Pomiar rozmiaru video (W, H) - uzywane do skalowania overlayu do
+    // rozdzielczosci wejscia. Fallback 1080x1920 gdy probe padnie.
+    final dims = await _probeVideoDimensions(inputPath) ??
+        const _VideoDims(1080, 1920);
+
     // Music offset - priorytet: config.musicOffsetSec (z AI viral analysis
     // albo manual admin) -> heurystyka 30% dlugosci jako fallback.
     int musicOffsetSec = 0;
@@ -110,6 +115,7 @@ class VideoProcessor extends ChangeNotifier {
       config: config,
       actualDuration: actualDuration,
       musicOffsetSec: musicOffsetSec,
+      videoDims: dims,
     );
 
     debugPrint('[FFmpeg] args: ${args.join(" ")}');
@@ -202,6 +208,30 @@ class VideoProcessor extends ChangeNotifier {
     }
   }
 
+  /// Wyciagnij wymiary video (W, H) ze streamu. Null gdy probe zawiedzie.
+  Future<_VideoDims?> _probeVideoDimensions(String path) async {
+    try {
+      final info = await FFprobeKit.getMediaInformation(path);
+      final media = info.getMediaInformation();
+      if (media == null) return null;
+      final streams = media.getStreams();
+      for (final s in streams) {
+        final type = s.getType();
+        if (type == 'video') {
+          final w = s.getWidth();
+          final h = s.getHeight();
+          if (w != null && h != null && w > 0 && h > 0) {
+            return _VideoDims(w, h);
+          }
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[FFprobe] dims fail: $e');
+      return null;
+    }
+  }
+
   /// Buduje liste argumentow FFmpeg.
   List<String> _buildArgs({
     required String inputPath,
@@ -209,6 +239,7 @@ class VideoProcessor extends ChangeNotifier {
     required ProcessingConfig config,
     required Duration actualDuration,
     int musicOffsetSec = 0,
+    _VideoDims videoDims = const _VideoDims(1080, 1920),
   }) {
     final args = <String>['-y', '-i', inputPath];
 
@@ -235,6 +266,7 @@ class VideoProcessor extends ChangeNotifier {
       config,
       hasOverlay: hasOverlay,
       actualDuration: actualDuration,
+      videoDims: videoDims,
     );
     args.addAll(['-filter_complex', filter, '-map', '[vout]']);
 
@@ -270,6 +302,7 @@ class VideoProcessor extends ChangeNotifier {
     ProcessingConfig config, {
     required bool hasOverlay,
     required Duration actualDuration,
+    _VideoDims videoDims = const _VideoDims(1080, 1920),
   }) {
     final parts = <String>[];
     parts.add('[0:v]format=yuv420p,fps=30[v0]');
@@ -292,18 +325,19 @@ class VideoProcessor extends ChangeNotifier {
         break;
     }
 
-    // Overlay PNG (opcjonalnie)
+    // Overlay PNG (opcjonalnie). Doskalowujemy do rozdzielczosci video
+    // zachowujac aspect ratio (force_original_aspect_ratio=decrease),
+    // reszte paddingujemy transparentnym kanalem alpha, zeby PNG centrowal
+    // sie na video niezaleznie od proporcji.
     if (hasOverlay) {
-      // overlay = index 2 jesli jest music (idx 1), inaczej 1
+      // Input indices: 0=video, 1=music (jesli jest), 2=overlay (lub 1 gdy brak music).
       final ovIdx = (config.musicPath != null) ? 2 : 1;
-      parts.add(
-          '[$ovIdx:v]scale2ref=w=iw:h=ih[ovscaled][vbase]');
-      parts.add('[vbase]$currentLabel[vbase2]');
-      // Faktyczny overlay po scale2ref - skomplikowane, dla MVP prosty overlay
-      // bez scale2ref. Zakladamy ze overlay ma ta sama rozdzielczosc co video.
-      parts.removeLast();
-      parts.removeLast();
-      parts.add('$currentLabel[$ovIdx:v]overlay=0:0[ov]');
+      final w = videoDims.width;
+      final h = videoDims.height;
+      parts.add('[$ovIdx:v]format=rgba,'
+          'scale=$w:$h:force_original_aspect_ratio=decrease,'
+          'pad=$w:$h:(ow-iw)/2:(oh-ih)/2:color=0x00000000[ovfit]');
+      parts.add('$currentLabel[ovfit]overlay=0:0[ov]');
       currentLabel = '[ov]';
     }
 
@@ -312,6 +346,14 @@ class VideoProcessor extends ChangeNotifier {
 
     return parts.join(';');
   }
+}
+
+/// Prosty holder na wymiary video (W x H). Uzywany do skalowania overlayu
+/// i innych filtrow ktore potrzebuja znac rozdzielczosc wejscia.
+class _VideoDims {
+  final int width;
+  final int height;
+  const _VideoDims(this.width, this.height);
 }
 
 // --- Per-template filter builders -------------------------------------------

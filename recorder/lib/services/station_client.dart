@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -19,6 +20,8 @@ class EventConfig {
     required this.eventName,
     this.overlayPath,
     this.musicPath,
+    this.overlayUrl,
+    this.musicUrl,
     this.musicOffsetSec,
     this.musicOffsetMode,
     this.textTop,
@@ -32,8 +35,15 @@ class EventConfig {
 
   final int eventId;
   final String eventName;
+  /// Local filesystem path (set by Station when Station==Recorder, or later by
+  /// Recorder after downloading from overlayUrl/musicUrl).
   final String? overlayPath;
   final String? musicPath;
+  /// Backend URL dla overlay/music. Recorder pobiera do swojego docs cache
+  /// gdy te URL-e sa dostarczone (Station na innym urzadzeniu = nie mozemy
+  /// polegac na lokalnej sciezce Stationa).
+  final String? overlayUrl;
+  final String? musicUrl;
   /// Offset (sekundy) skad ma startowac miks muzyki. Null => heurystyka
   /// recordera (30% dlugosci clamp 30-60). Ustawiony przez backend library
   /// (AI viral analysis albo manual w admin panel).
@@ -55,6 +65,8 @@ class EventConfig {
         eventName: j['event_name']?.toString() ?? '',
         overlayPath: j['overlay_path']?.toString(),
         musicPath: j['music_path']?.toString(),
+        overlayUrl: j['overlay_url']?.toString(),
+        musicUrl: j['music_url']?.toString(),
         musicOffsetSec: (j['music_offset_sec'] as num?)?.toDouble(),
         musicOffsetMode: j['music_offset_mode']?.toString(),
         textTop: j['text_top']?.toString(),
@@ -64,6 +76,24 @@ class EventConfig {
         slowmoFactor: (j['slowmo_factor'] as num?)?.toDouble(),
         rotationDir: j['rotation_dir']?.toString(),
         rotationSpeed: (j['rotation_speed'] as num?)?.toInt(),
+      );
+
+  EventConfig copyWith({String? overlayPath, String? musicPath}) => EventConfig(
+        eventId: eventId,
+        eventName: eventName,
+        overlayPath: overlayPath ?? this.overlayPath,
+        musicPath: musicPath ?? this.musicPath,
+        overlayUrl: overlayUrl,
+        musicUrl: musicUrl,
+        musicOffsetSec: musicOffsetSec,
+        musicOffsetMode: musicOffsetMode,
+        textTop: textTop,
+        textBottom: textBottom,
+        resolution: resolution,
+        videoDurationSec: videoDurationSec,
+        slowmoFactor: slowmoFactor,
+        rotationDir: rotationDir,
+        rotationSpeed: rotationSpeed,
       );
 }
 
@@ -300,20 +330,76 @@ class StationClient extends ChangeNotifier {
           send({'type': WireMsg.pong});
           break;
         case WireMsg.eventConfig:
-          final cfg = EventConfig.fromJson(msg);
-          _lastEventConfig = cfg;
-          debugPrint('[StationClient] Event config: ${cfg.eventName} '
-              'resolution=${cfg.resolution} duration=${cfg.videoDurationSec}s');
-          // Zastosuj parametry nagrywania ze Station (nadpisuja lokalne
-          // preferences Recordera). Next nagrywanie uzyje tych wartosci.
-          _applyRecordingParams(cfg);
-          onEventConfig?.call(cfg);
+          // Async handler - pobiera overlay/music lokalnie gdy sa dostarczone
+          // jako URL-e (Station na innym urzadzeniu, lokalne sciezki Stationa
+          // tutaj nie istnieja).
+          unawaited(_handleEventConfig(msg));
           break;
         default:
           debugPrint('[StationClient] Unknown msg: ${msg['type']}');
       }
     } catch (e) {
       debugPrint('[StationClient] parse error: $e');
+    }
+  }
+
+  Future<void> _handleEventConfig(Map<String, dynamic> msg) async {
+    final cfg = EventConfig.fromJson(msg);
+    String? overlayLocal = cfg.overlayPath;
+    String? musicLocal = cfg.musicPath;
+
+    // Jesli Station podala lokalna sciezke ale plik nie istnieje (= Station
+    // na innym urzadzeniu), ignorujemy ja - preferujemy pobieranie z URL.
+    if (overlayLocal != null && !File(overlayLocal).existsSync()) {
+      overlayLocal = null;
+    }
+    if (musicLocal != null && !File(musicLocal).existsSync()) {
+      musicLocal = null;
+    }
+
+    if (overlayLocal == null && cfg.overlayUrl != null &&
+        cfg.overlayUrl!.isNotEmpty) {
+      overlayLocal = await _downloadEventAsset(cfg.overlayUrl!, 'overlay');
+    }
+    if (musicLocal == null && cfg.musicUrl != null &&
+        cfg.musicUrl!.isNotEmpty) {
+      musicLocal = await _downloadEventAsset(cfg.musicUrl!, 'music');
+    }
+
+    final finalCfg = cfg.copyWith(
+      overlayPath: overlayLocal,
+      musicPath: musicLocal,
+    );
+    _lastEventConfig = finalCfg;
+    debugPrint('[StationClient] Event config: ${finalCfg.eventName} '
+        'overlay=${finalCfg.overlayPath != null} '
+        'music=${finalCfg.musicPath != null}');
+    _applyRecordingParams(finalCfg);
+    onEventConfig?.call(finalCfg);
+  }
+
+  /// Pobiera URL backendu do docs/event_assets/<hash>.bin. Cache keyed by
+  /// URL - ten sam URL = ten sam plik (skip re-download). Plik zachowany
+  /// miedzy sesjami Recorder.
+  Future<String?> _downloadEventAsset(String url, String label) async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final cacheDir = Directory(p.join(dir.path, 'event_assets'));
+      if (!await cacheDir.exists()) {
+        await cacheDir.create(recursive: true);
+      }
+      final key = url.hashCode.toUnsigned(32).toRadixString(36);
+      final target = File(p.join(cacheDir.path, 'asset_${label}_$key.bin'));
+      if (await target.exists() && await target.length() > 0) {
+        return target.path;
+      }
+      await _dio.download(url, target.path);
+      debugPrint('[StationClient] Downloaded $label from $url '
+          '-> ${target.path} (${await target.length()} bytes)');
+      return target.path;
+    } catch (e) {
+      debugPrint('[StationClient] download $label fail: $e');
+      return null;
     }
   }
 
