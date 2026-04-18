@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -7,6 +8,10 @@ import 'package:path_provider/path_provider.dart';
 
 /// Biblioteka muzyki. Laduje liste MP3 z bundled assets na disk temp
 /// (FFmpeg wymaga file path, nie asset URL).
+///
+/// Dodatkowo trzyma mape pre-analyzed viral offsets (librosa skrypt uruchomiony
+/// off-line na tracks, wynik w `assets/music/viral_offsets.json`).
+/// Brak wpisu => recorder uzyje heurystyki 30% dlugosci (fallback).
 ///
 /// Pliki MP3 trzymamy w `assets/music/` (trzeba dodac rozszerzenie w pubspec).
 /// Tu jest lista znanych plikow - patrz [knownTracks]. Jak dodasz nowy plik,
@@ -46,10 +51,21 @@ class MusicLibrary extends ChangeNotifier {
   ];
 
   final List<String> _cachedPaths = [];
+  /// filename (np. 'track_03.webm') -> viral offset (sekundy).
+  final Map<String, double> _viralOffsets = {};
   bool _ready = false;
 
   bool get isReady => _ready;
   List<String> get availablePaths => List.unmodifiable(_cachedPaths);
+
+  /// Zwraca viral offset dla danej sciezki albo null jesli brak analizy.
+  /// Dopasowuje po filename (basename), wiec dziala zarowno dla bundled
+  /// paths w ApplicationDocuments, jak i event-specific sciezek - jezeli
+  /// filename akurat pasuje.
+  double? viralOffsetFor(String path) {
+    final name = p.basename(path);
+    return _viralOffsets[name];
+  }
 
   /// Kopiuje wszystkie tracks z assets do app documents directory.
   /// Skipuje pliki ktorych brak w assets.
@@ -83,8 +99,32 @@ class MusicLibrary extends ChangeNotifier {
         debugPrint('[MusicLibrary] skip $name: $e');
       }
     }
+
+    // Zaladuj pre-analyzed offsets. Brak pliku = graceful (heurystyka).
+    await _loadViralOffsets();
+
     _ready = true;
     notifyListeners();
-    debugPrint('[MusicLibrary] ready: ${_cachedPaths.length} tracks');
+    debugPrint('[MusicLibrary] ready: ${_cachedPaths.length} tracks, '
+        '${_viralOffsets.length} viral offsets');
+  }
+
+  Future<void> _loadViralOffsets() async {
+    try {
+      final raw = await rootBundle.loadString(
+        'assets/music/viral_offsets.json',
+      );
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        _viralOffsets.clear();
+        decoded.forEach((key, value) {
+          if (key is String && value is num) {
+            _viralOffsets[key] = value.toDouble();
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('[MusicLibrary] viral_offsets.json brak lub invalid: $e');
+    }
   }
 }

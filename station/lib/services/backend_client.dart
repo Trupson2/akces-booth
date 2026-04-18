@@ -155,6 +155,8 @@ class BackendEvent {
     this.musicId,
     this.overlayUrl,
     this.musicUrl,
+    this.musicOffsetSec,
+    this.musicOffsetMode,
     this.videoCount = 0,
   });
 
@@ -169,6 +171,8 @@ class BackendEvent {
   final int? musicId;
   final String? overlayUrl;
   final String? musicUrl;
+  final double? musicOffsetSec;
+  final String? musicOffsetMode;
   final int videoCount;
 
   factory BackendEvent.fromJson(Map<String, dynamic> j) {
@@ -184,6 +188,8 @@ class BackendEvent {
       musicId: j['music_id'] as int?,
       overlayUrl: j['overlay_url']?.toString(),
       musicUrl: j['music_url']?.toString(),
+      musicOffsetSec: (j['music_offset_sec'] as num?)?.toDouble(),
+      musicOffsetMode: j['music_offset_mode']?.toString(),
       videoCount: (j['video_count'] as num?)?.toInt() ?? 0,
     );
   }

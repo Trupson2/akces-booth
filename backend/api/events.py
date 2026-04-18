@@ -32,8 +32,14 @@ def active_event_api():  # type: ignore[no-untyped-def]
         overlay_url = f"{Config.PUBLIC_BASE_URL}/api/events/overlay/{e['overlay_id']}"
 
     music_url = None
+    music_offset_sec: float | None = None
+    music_offset_mode: str | None = None
     if e.get("music_id"):
         music_url = f"{Config.PUBLIC_BASE_URL}/api/events/music/{e['music_id']}"
+        track = models.get_music(Config.DB_PATH, int(e["music_id"]))
+        if track:
+            music_offset_sec = models.resolve_music_offset(track)
+            music_offset_mode = track.get("offset_mode") or "default_30s"
 
     return jsonify({
         "active": True,
@@ -49,6 +55,8 @@ def active_event_api():  # type: ignore[no-untyped-def]
             "music_id": e.get("music_id"),
             "overlay_url": overlay_url,
             "music_url": music_url,
+            "music_offset_sec": music_offset_sec,
+            "music_offset_mode": music_offset_mode,
             "video_count": video_count,
         },
     })

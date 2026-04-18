@@ -53,16 +53,65 @@
     </div>
     <ul class="divide-y divide-slate-700">
       {% for m in music %}
-        <li class="py-2 flex items-center gap-3">
-          <audio controls preload="none"
-                 src="/storage/{{ m.file_path.split('storage/')[-1] if 'storage/' in m.file_path else m.file_path }}"
-                 class="h-8"></audio>
-          <div class="flex-1 text-sm">
-            <div class="font-semibold">{{ m.name }}</div>
-            <div class="text-xs text-slate-400">{{ m.source }}</div>
+        <li class="py-3" data-music-id="{{ m.id }}">
+          <div class="flex items-center gap-3">
+            <audio controls preload="none"
+                   src="/storage/{{ m.file_path.split('storage/')[-1] if 'storage/' in m.file_path else m.file_path }}"
+                   class="h-8"></audio>
+            <div class="flex-1 text-sm">
+              <div class="font-semibold">{{ m.name }}</div>
+              <div class="text-xs text-slate-400">{{ m.source }}</div>
+            </div>
+            <button onclick="deleteMusic({{ m.id }})"
+                    class="text-red-400 hover:text-red-300 text-sm">Usun</button>
           </div>
-          <button onclick="deleteMusic({{ m.id }})"
-                  class="text-red-400 hover:text-red-300 text-sm">Usun</button>
+
+          <div class="mt-2 ml-2 flex flex-wrap items-center gap-2 text-xs">
+            <span class="text-slate-400">Start piosenki:</span>
+            <div class="inline-flex rounded bg-slate-900 p-0.5"
+                 role="radiogroup" data-mode-group="{{ m.id }}">
+              <button type="button" data-mode="default_30s"
+                      class="px-2 py-1 rounded transition
+                             {% if (m.offset_mode or 'default_30s') == 'default_30s' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:bg-slate-700{% endif %}"
+                      onclick="setMode({{ m.id }}, 'default_30s')">30s</button>
+              <button type="button" data-mode="ai"
+                      class="px-2 py-1 rounded transition
+                             {% if m.offset_mode == 'ai' %}bg-purple-600 text-white{% else %}text-slate-300 hover:bg-slate-700{% endif %}"
+                      onclick="setMode({{ m.id }}, 'ai')">AI viral</button>
+              <button type="button" data-mode="custom"
+                      class="px-2 py-1 rounded transition
+                             {% if m.offset_mode == 'custom' %}bg-emerald-600 text-white{% else %}text-slate-300 hover:bg-slate-700{% endif %}"
+                      onclick="setMode({{ m.id }}, 'custom')">Custom</button>
+            </div>
+
+            <span data-custom-wrap="{{ m.id }}"
+                  class="{% if m.offset_mode != 'custom' %}hidden{% endif %} flex items-center gap-1">
+              <input type="number" min="0" step="0.5"
+                     value="{{ '%.1f'|format(m.custom_offset_sec or 30.0) }}"
+                     data-custom-input="{{ m.id }}"
+                     class="w-20 px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-100">
+              <span class="text-slate-400">sek</span>
+              <button class="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600"
+                      onclick="applyCustom({{ m.id }})">OK</button>
+            </span>
+
+            <span class="ml-auto text-slate-400">
+              {% if m.analysis_status == 'pending' %}
+                <span data-status="{{ m.id }}" class="text-amber-300">⟳ analiza...</span>
+              {% elif m.analysis_status == 'failed' %}
+                <span data-status="{{ m.id }}" class="text-red-400"
+                      title="{{ m.analysis_error }}">✗ blad</span>
+              {% elif m.viral_offset_sec is not none %}
+                <span data-status="{{ m.id }}">AI: <b class="text-purple-300">{{ '%.1f'|format(m.viral_offset_sec) }}s</b></span>
+              {% else %}
+                <span data-status="{{ m.id }}" class="italic">brak analizy</span>
+              {% endif %}
+            </span>
+
+            <button class="px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-white"
+                    onclick="analyzeMusic({{ m.id }})"
+                    data-analyze-btn="{{ m.id }}">🤖 Analizuj</button>
+          </div>
         </li>
       {% else %}
         <li class="py-8 text-center text-slate-400">Brak utworow.</li>
@@ -99,6 +148,104 @@
     if (!confirm('Usunac?')) return;
     const r = await fetch('/api/library/music/' + id, { method: 'DELETE' });
     if (r.ok) location.reload();
+  }
+
+  function _highlightMode(id, mode) {
+    const group = document.querySelector(`[data-mode-group="${id}"]`);
+    if (!group) return;
+    group.querySelectorAll('button[data-mode]').forEach(btn => {
+      const active = btn.dataset.mode === mode;
+      btn.classList.remove(
+        'bg-indigo-600', 'bg-purple-600', 'bg-emerald-600',
+        'text-white', 'text-slate-300', 'hover:bg-slate-700'
+      );
+      if (active) {
+        const color = mode === 'ai' ? 'bg-purple-600'
+          : mode === 'custom' ? 'bg-emerald-600' : 'bg-indigo-600';
+        btn.classList.add(color, 'text-white');
+      } else {
+        btn.classList.add('text-slate-300', 'hover:bg-slate-700');
+      }
+    });
+    const wrap = document.querySelector(`[data-custom-wrap="${id}"]`);
+    if (wrap) wrap.classList.toggle('hidden', mode !== 'custom');
+  }
+
+  async function setMode(id, mode) {
+    const body = { mode };
+    if (mode === 'custom') {
+      const input = document.querySelector(`[data-custom-input="${id}"]`);
+      body.custom_offset_sec = parseFloat(input?.value || '30');
+    }
+    const r = await fetch(`/api/library/music/${id}/offset-mode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) { alert('Blad zmiany trybu'); return; }
+    _highlightMode(id, mode);
+  }
+
+  async function applyCustom(id) {
+    await setMode(id, 'custom');
+  }
+
+  async function analyzeMusic(id) {
+    const btn = document.querySelector(`[data-analyze-btn="${id}"]`);
+    const status = document.querySelector(`[data-status="${id}"]`);
+    if (btn) btn.disabled = true;
+    if (status) {
+      status.textContent = '⟳ analiza...';
+      status.className = 'text-amber-300';
+    }
+    const r = await fetch(`/api/library/music/${id}/analyze`, { method: 'POST' });
+    if (!r.ok) {
+      if (status) {
+        status.textContent = '✗ blad startu analizy';
+        status.className = 'text-red-400';
+      }
+      if (btn) btn.disabled = false;
+      return;
+    }
+    _pollAnalysis(id);
+  }
+
+  function _pollAnalysis(id, attempt = 0) {
+    if (attempt > 30) {
+      const s = document.querySelector(`[data-status="${id}"]`);
+      if (s) {
+        s.textContent = '✗ timeout (>60s)';
+        s.className = 'text-red-400';
+      }
+      const btn = document.querySelector(`[data-analyze-btn="${id}"]`);
+      if (btn) btn.disabled = false;
+      return;
+    }
+    setTimeout(async () => {
+      const r = await fetch(`/api/library/music/${id}`);
+      if (!r.ok) return _pollAnalysis(id, attempt + 1);
+      const data = await r.json();
+      const status = document.querySelector(`[data-status="${id}"]`);
+      const btn = document.querySelector(`[data-analyze-btn="${id}"]`);
+      if (data.analysis_status === 'success' && data.viral_offset_sec != null) {
+        if (status) {
+          status.innerHTML = 'AI: <b class="text-purple-300">' +
+            data.viral_offset_sec.toFixed(1) + 's</b>';
+          status.className = '';
+        }
+        if (btn) btn.disabled = false;
+        _highlightMode(id, data.offset_mode);
+      } else if (data.analysis_status === 'failed') {
+        if (status) {
+          status.textContent = '✗ ' + (data.analysis_error || 'fail');
+          status.className = 'text-red-400';
+          status.title = data.analysis_error || '';
+        }
+        if (btn) btn.disabled = false;
+      } else {
+        _pollAnalysis(id, attempt + 1);
+      }
+    }, 2000);
   }
 </script>
 <style>

@@ -12,6 +12,7 @@ class ProcessingConfig {
     this.speedUpFactor = 1.0,
     this.freezeSeconds = 0.0,
     this.musicPath,
+    this.musicOffsetSec,
     this.overlayPath,
     this.textTop,
     this.textBottom,
@@ -35,6 +36,12 @@ class ProcessingConfig {
   final double freezeSeconds;
 
   final String? musicPath;
+
+  /// Offset startu muzyki w sekundach. Null => heurystyka 30% dlugosci
+  /// (fallback dla bundled tracks bez pre-analizy).
+  /// Ustawiony przez Station z event config (AI viral albo manual z admin).
+  final double? musicOffsetSec;
+
   final String? overlayPath;
   final String? textTop;
   final String? textBottom;

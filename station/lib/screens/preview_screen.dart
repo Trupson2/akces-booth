@@ -41,7 +41,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
       }
       _controller = ctrl
         ..setLooping(true)
-        ..setVolume(0);
+        ..setVolume(1.0);
       await _controller!.initialize();
       if (!mounted) return;
       await _controller!.play();

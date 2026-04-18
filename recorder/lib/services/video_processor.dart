@@ -84,17 +84,24 @@ class VideoProcessor extends ChangeNotifier {
     // zaplanowane 8s - camera init delay, wczesniejszy stop).
     final actualDuration = await _probeDuration(inputPath) ?? config.inputDuration;
 
-    // Probe muzyki - auto-offset na chorus (30% dlugosci, clamp 30-60s).
+    // Music offset - priorytet: config.musicOffsetSec (z AI viral analysis
+    // albo manual admin) -> heurystyka 30% dlugosci jako fallback.
     int musicOffsetSec = 0;
     if (config.musicPath != null && File(config.musicPath!).existsSync()) {
-      final musicDur = await _probeDuration(config.musicPath!);
-      if (musicDur != null && musicDur.inSeconds > 30) {
-        musicOffsetSec = (musicDur.inSeconds * 0.3).round().clamp(30, 60);
+      if (config.musicOffsetSec != null && config.musicOffsetSec! >= 0) {
+        musicOffsetSec = config.musicOffsetSec!.round();
+        debugPrint('[VideoProcessor] Music offset (from config): '
+            '${musicOffsetSec}s');
       } else {
-        musicOffsetSec = 40;
+        final musicDur = await _probeDuration(config.musicPath!);
+        if (musicDur != null && musicDur.inSeconds > 30) {
+          musicOffsetSec = (musicDur.inSeconds * 0.3).round().clamp(30, 60);
+        } else {
+          musicOffsetSec = 40;
+        }
+        debugPrint('[VideoProcessor] Music offset (heuristic): '
+            '${musicOffsetSec}s (dur: ${musicDur?.inSeconds ?? "?"}s)');
       }
-      debugPrint('[VideoProcessor] Music offset: ${musicOffsetSec}s '
-          '(dur: ${musicDur?.inSeconds ?? "?"}s)');
     }
 
     final args = _buildArgs(
@@ -138,10 +145,21 @@ class VideoProcessor extends ChangeNotifier {
       },
     );
 
-    // Poczekaj na zakonczenie sesji (pool).
+    // Poczekaj na zakonczenie sesji. Fix: ffmpeg_kit_flutter_new 4.1.0
+    // zmienilo state names (nie ma juz 'COMPLETED'/'FAILED' literalnie),
+    // uzywamy getReturnCode() ktore zwraca null pokad sesja leci,
+    // non-null po zakonczeniu (success/fail/cancel).
+    // Plus safety timeout 90s (ochrona przed infinity loop gdyby ffmpeg
+    // zawisl - Station ma swoje 45s processingMaxDuration).
+    final deadline = DateTime.now().add(const Duration(seconds: 90));
     while (true) {
-      final state = await session.getState();
-      if (state.name == 'COMPLETED' || state.name == 'FAILED') break;
+      final rc = await session.getReturnCode();
+      if (rc != null) break;
+      if (DateTime.now().isAfter(deadline)) {
+        debugPrint('[FFmpeg] timeout 90s waiting for session completion');
+        await session.cancel();
+        break;
+      }
       await Future<void>.delayed(const Duration(milliseconds: 250));
     }
 

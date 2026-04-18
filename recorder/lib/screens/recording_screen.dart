@@ -211,26 +211,47 @@ class _RecordingScreenState extends State<RecordingScreen>
         ...musicLib.availablePaths,
       ];
 
-      final params = picker.pick(musicPool: musicPool);
+      // Fotobudka 360 placi sie za efekt boomerangu (spin+cofanie). Filtrujemy
+      // templates BEZ cofania - slowCinematic i fastSlowFast - zeby klient
+      // zawsze dostal cofanie. Dwa warianty dla wizualnej roznorodnosci.
+      const spinTemplates = <EffectTemplate>[
+        EffectTemplate.classicBoomerang,
+        EffectTemplate.freezeReverse,
+      ];
+      final params = picker.pick(
+        musicPool: musicPool,
+        allowedTemplates: spinTemplates,
+      );
+      // Viral offset: jesli picker wzial event-specific track, uzyj offsetu
+      // z admina (AI/manual). Bundled tracks korzystaja z pre-analyzed JSON
+      // ktory MusicLibrary wystawia przez viralOffsetFor(path).
+      double? musicOffset;
+      if (eventCfg?.musicPath != null &&
+          params.musicPath == eventCfg!.musicPath &&
+          eventCfg.musicOffsetSec != null) {
+        musicOffset = eventCfg.musicOffsetSec;
+      } else if (params.musicPath != null) {
+        musicOffset = musicLib.viralOffsetFor(params.musicPath!);
+      }
       var config = ProcessingConfig.fromRandom(
         params: params,
         inputDuration: _kMaxRecording,
       );
-      // Dodajemy overlay + text z event config (jesli dostarczone).
-      if (eventCfg != null) {
-        config = ProcessingConfig(
-          template: config.template,
-          slowMoTailFactor: config.slowMoTailFactor,
-          slowMoTailSeconds: config.slowMoTailSeconds,
-          speedUpFactor: config.speedUpFactor,
-          freezeSeconds: config.freezeSeconds,
-          musicPath: config.musicPath,
-          overlayPath: eventCfg.overlayPath,
-          textTop: eventCfg.textTop,
-          textBottom: eventCfg.textBottom,
-          inputDuration: config.inputDuration,
-        );
-      }
+      // Dodajemy overlay + text z event config (jesli dostarczone)
+      // oraz offset muzyki (AI viral).
+      config = ProcessingConfig(
+        template: config.template,
+        slowMoTailFactor: config.slowMoTailFactor,
+        slowMoTailSeconds: config.slowMoTailSeconds,
+        speedUpFactor: config.speedUpFactor,
+        freezeSeconds: config.freezeSeconds,
+        musicPath: config.musicPath,
+        musicOffsetSec: musicOffset,
+        overlayPath: eventCfg?.overlayPath,
+        textTop: eventCfg?.textTop,
+        textBottom: eventCfg?.textBottom,
+        inputDuration: config.inputDuration,
+      );
       debugPrint('[RecordingScreen] Random effect: ${params.debugSignature} '
           'event=${eventCfg?.eventName ?? "none"}');
       finalPath = await processor.process(

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'backend_client.dart';
 import 'local_server.dart';
+import 'settings_store.dart';
 import 'wire_protocol.dart';
 
 /// Menedzer aktywnego eventu.
@@ -15,11 +16,13 @@ class EventManager extends ChangeNotifier {
   EventManager({
     required this.backend,
     required this.server,
+    this.settings,
     this.syncInterval = const Duration(seconds: 30),
   });
 
   final BackendClient backend;
   final LocalServer server;
+  final SettingsStore? settings;
   final Duration syncInterval;
 
   BackendEvent? _activeEvent;
@@ -125,16 +128,27 @@ class EventManager extends ChangeNotifier {
   void _sendConfigToRecorder() {
     final e = _activeEvent;
     if (e == null) return;
+    final recorderConfig = settings?.toRecorderConfig() ?? const {};
     server.sendToRecorder({
       'type': WireMsg.eventConfig,
       'event_id': e.id,
       'event_name': e.name,
       'overlay_path': _cachedOverlayPath,
       'music_path': _cachedMusicPath,
+      'music_offset_sec': e.musicOffsetSec,
+      'music_offset_mode': e.musicOffsetMode,
       'text_top': e.textTop,
       'text_bottom': e.textBottom,
+      // Parametry nagrywania z SettingsStore (resolution, duration, slowmo,
+      // rotation). Recorder zapisuje je lokalnie i stosuje przy kolejnym
+      // start_recording.
+      ...recorderConfig,
     });
   }
+
+  /// Wywolaj po zmianie SettingsStore (rozdzielczosc, slowmo, itd.) -
+  /// pushuje aktualny config do Recordera bez czekania na poll eventu.
+  void pushRecorderConfig() => _sendConfigToRecorder();
 
   /// Wywolywane po udanym uploadzie video z Station do backendu.
   /// Zwiekszamy licznik lokalnie (animated), prawdziwa wartosc przyjdzie

@@ -63,6 +63,12 @@ CREATE TABLE IF NOT EXISTS library_music (
     tags TEXT,
     duration_seconds REAL,
     license_notes TEXT,
+    offset_mode TEXT DEFAULT 'default_30s',
+    viral_offset_sec REAL,
+    custom_offset_sec REAL,
+    analysis_status TEXT DEFAULT 'none',
+    analysis_error TEXT,
+    analyzed_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -113,6 +119,34 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "published_to_facebook_at" not in cols:
         conn.execute(
             "ALTER TABLE videos ADD COLUMN published_to_facebook_at TIMESTAMP"
+        )
+
+    # library_music - viral moment / offset mode kolumny (2026-04-18).
+    music_cols = {row[1] for row in conn.execute(
+        "PRAGMA table_info(library_music)").fetchall()}
+    if "offset_mode" not in music_cols:
+        conn.execute(
+            "ALTER TABLE library_music ADD COLUMN offset_mode TEXT DEFAULT 'default_30s'"
+        )
+    if "viral_offset_sec" not in music_cols:
+        conn.execute(
+            "ALTER TABLE library_music ADD COLUMN viral_offset_sec REAL"
+        )
+    if "custom_offset_sec" not in music_cols:
+        conn.execute(
+            "ALTER TABLE library_music ADD COLUMN custom_offset_sec REAL"
+        )
+    if "analysis_status" not in music_cols:
+        conn.execute(
+            "ALTER TABLE library_music ADD COLUMN analysis_status TEXT DEFAULT 'none'"
+        )
+    if "analysis_error" not in music_cols:
+        conn.execute(
+            "ALTER TABLE library_music ADD COLUMN analysis_error TEXT"
+        )
+    if "analyzed_at" not in music_cols:
+        conn.execute(
+            "ALTER TABLE library_music ADD COLUMN analyzed_at TIMESTAMP"
         )
     # early_access_signups table is in SCHEMA (CREATE IF NOT EXISTS) - nic do migrowania
 
@@ -412,6 +446,81 @@ def insert_music(db_path: Path, *, name: str, file_path: str,
 def delete_music(db_path: Path, music_id: int) -> None:
     with get_conn(db_path) as conn:
         conn.execute("DELETE FROM library_music WHERE id=?", (music_id,))
+
+
+def get_music(db_path: Path, music_id: int) -> dict[str, Any] | None:
+    with get_conn(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM library_music WHERE id=?", (music_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def set_music_offset_mode(db_path: Path, music_id: int, *, mode: str,
+                          custom_offset_sec: float | None = None) -> None:
+    """Ustawia tryb offset per utworze. mode ∈ {'default_30s','ai','custom'}.
+    Dla 'custom' wymagane custom_offset_sec. Dla 'ai' zapis wartosci robi
+    set_music_viral_offset() po skonczeniu analizy.
+    """
+    if mode not in {"default_30s", "ai", "custom"}:
+        raise ValueError(f"invalid offset_mode: {mode}")
+    with get_conn(db_path) as conn:
+        if mode == "custom":
+            conn.execute(
+                "UPDATE library_music SET offset_mode=?, custom_offset_sec=? WHERE id=?",
+                (mode, custom_offset_sec, music_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE library_music SET offset_mode=? WHERE id=?",
+                (mode, music_id),
+            )
+
+
+def set_music_analysis_status(
+    db_path: Path, music_id: int, status: str,
+    *, error: str | None = None,
+) -> None:
+    with get_conn(db_path) as conn:
+        conn.execute(
+            "UPDATE library_music SET analysis_status=?, analysis_error=? WHERE id=?",
+            (status, error, music_id),
+        )
+
+
+def set_music_viral_offset(db_path: Path, music_id: int,
+                           viral_offset_sec: float) -> None:
+    """Zapis wyniku librosa analizy + auto-switch mode na 'ai'."""
+    with get_conn(db_path) as conn:
+        conn.execute(
+            """
+            UPDATE library_music
+            SET viral_offset_sec=?,
+                analysis_status='success',
+                analysis_error=NULL,
+                analyzed_at=CURRENT_TIMESTAMP,
+                offset_mode=CASE WHEN offset_mode='default_30s' THEN 'ai' ELSE offset_mode END
+            WHERE id=?
+            """,
+            (viral_offset_sec, music_id),
+        )
+
+
+def resolve_music_offset(track: dict[str, Any], *,
+                         default_sec: float = 30.0) -> float:
+    """Zwraca faktyczny offset ktory powinien byc uzyty przy miksie.
+    Wybiera zgodnie z offset_mode, fallback na default_30s jesli brak danych.
+    """
+    mode = track.get("offset_mode") or "default_30s"
+    if mode == "ai":
+        v = track.get("viral_offset_sec")
+        if v is not None:
+            return float(v)
+    elif mode == "custom":
+        v = track.get("custom_offset_sec")
+        if v is not None:
+            return float(v)
+    return float(default_sec)
 
 
 # --- Stats ---------------------------------------------------------------------
