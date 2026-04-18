@@ -18,6 +18,7 @@ from flask import Flask, render_template
 from flask_session import Session
 
 from config import Config
+from extensions import limiter
 import models
 from api.upload import upload_bp
 from api.share import share_bp
@@ -41,6 +42,9 @@ def create_app() -> Flask:
     app.config["SECRET_KEY"] = Config.SECRET_KEY
 
     Session(app)
+
+    # Rate limiting - inicjalizujemy globalny limiter (pattern z extensions.py).
+    limiter.init_app(app)
 
     logging.basicConfig(
         level=getattr(logging, Config.LOG_LEVEL, logging.INFO),
@@ -73,6 +77,18 @@ def create_app() -> Flask:
     def too_large(_):  # type: ignore[no-untyped-def]
         return ("Plik za duzy (max "
                 f"{Config.MAX_UPLOAD_SIZE // (1024*1024)} MB)"), 413
+
+    @app.errorhandler(429)
+    def rate_limited(_):  # type: ignore[no-untyped-def]
+        """Custom JSON response dla rate-limit (signup endpoint) + HTML fallback."""
+        from flask import jsonify, request
+        if request.path.startswith("/api/"):
+            return jsonify({
+                "ok": False,
+                "error": "rate_limit",
+                "message": "Zbyt wiele prob - sprobuj za minute.",
+            }), 429
+        return "Zbyt wiele zapytan - sprobuj pozniej.", 429
 
     return app
 

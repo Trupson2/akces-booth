@@ -123,36 +123,50 @@ class _Greeting extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // FittedBox skaluje cala kolumne do dostepnego miejsca - nigdy overflow.
-    return const FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('👋', style: TextStyle(fontSize: 48)),
-          SizedBox(height: 4),
-          Text(
-            'Wejdz na platforme',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 36,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.5,
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Ilustracja skalowana proporcjonalnie do dostepnego miejsca - nie
+        // dominuje ekranu, ale jest widoczna (większa niż stare emoji 👋).
+        final h = constraints.maxHeight;
+        final illustrationSize = (h * 0.55).clamp(180.0, 360.0);
+
+        return FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Ilustracja z Claude Design (Pakiet D)
+              Image.asset(
+                'assets/illustrations/idle.png',
+                width: illustrationSize,
+                height: illustrationSize,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Wejdz na platforme',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 36,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Usmiech, pozycja, klik START',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppTheme.muted,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
-          SizedBox(height: 4),
-          Text(
-            'Usmiech, pozycja, klik START',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppTheme.muted,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

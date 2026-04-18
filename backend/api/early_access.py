@@ -15,6 +15,7 @@ from flask import (
 
 import models
 from config import Config
+from extensions import limiter
 from notifier import notify_new_signup
 
 log = logging.getLogger(__name__)
@@ -56,8 +57,14 @@ def landing_asset(filename: str):  # type: ignore[no-untyped-def]
 
 
 @early_access_bp.route("/api/early-access/signup", methods=["POST"])
+@limiter.limit("5 per minute; 20 per hour", error_message="too_many_requests")
 def signup():  # type: ignore[no-untyped-def]
-    """JSON body: {email, consent, hero_variant?}. Zwraca 200 lub 400."""
+    """JSON body: {email, consent, hero_variant?}. Zwraca 200 lub 400.
+
+    Rate limit: 5/min + 20/h per IP (CF-Connecting-IP jesli za tunelem).
+    Bot spamujacy 1000 requestow z 1 IP trafi limit po 5. Realny uzytkownik
+    nie zauwazy (typowo 1 signup na osobe).
+    """
     payload = request.get_json(silent=True) or {}
     email = (payload.get("email") or "").strip().lower()
     consent = bool(payload.get("consent", True))
