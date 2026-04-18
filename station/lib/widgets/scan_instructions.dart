@@ -39,21 +39,21 @@ class _ScanInstructionsState extends State<ScanInstructions>
           children: [
             _Step(
               number: 1,
-              icon: Icons.photo_camera_rounded,
+              assetPath: 'assets/illustrations/icons/step-1-camera.png',
               text: 'Otworz aparat w telefonie',
               active: active == 0,
             ),
             const SizedBox(height: 8),
             _Step(
               number: 2,
-              icon: Icons.qr_code_scanner_rounded,
+              assetPath: 'assets/illustrations/icons/step-2-aim.png',
               text: 'Skieruj go na kod obok',
               active: active == 1,
             ),
             const SizedBox(height: 8),
             _Step(
               number: 3,
-              icon: Icons.touch_app_rounded,
+              assetPath: 'assets/illustrations/icons/step-3-tap.png',
               text: 'Stuknij w link, ktory wyskoczy',
               active: active == 2,
             ),
@@ -67,12 +67,12 @@ class _ScanInstructionsState extends State<ScanInstructions>
 class _Step extends StatelessWidget {
   const _Step({
     required this.number,
-    required this.icon,
+    required this.assetPath,
     required this.text,
     required this.active,
   });
   final int number;
-  final IconData icon;
+  final String assetPath;
   final String text;
   final bool active;
 
@@ -114,9 +114,18 @@ class _Step extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          Icon(icon,
-              size: 20,
-              color: active ? AppTheme.primary : AppTheme.muted),
+          // Custom icon z Claude Design (PNG 128x128 RGBA).
+          // Opacity animuje sie dyskretnie wraz z active state.
+          AnimatedOpacity(
+            opacity: active ? 1.0 : 0.55,
+            duration: const Duration(milliseconds: 350),
+            child: Image.asset(
+              assetPath,
+              width: 28,
+              height: 28,
+              fit: BoxFit.contain,
+            ),
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
