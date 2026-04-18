@@ -49,7 +49,7 @@ function PricingSection() {
               <span style={{
                 fontFamily: 'Inter, system-ui', fontSize: 72, fontWeight: 700,
                 letterSpacing: '-0.03em', lineHeight: 1, color: '#0F172A',
-              }}>49</span>
+              }}>89</span>
               <span style={{
                 fontFamily: 'Inter, system-ui', fontSize: 20, fontWeight: 500,
                 color: '#475569',
@@ -59,7 +59,7 @@ function PricingSection() {
               fontFamily: 'Inter, system-ui', fontSize: 14, color: '#64748B',
               marginBottom: 24, fontStyle: 'italic',
             }}>
-              * cena orientacyjna, finalna do ustalenia po walidacji z pierwszymi klientami
+              * cena startowa early access, zamrożona na 12 miesięcy dla zapisanych jako pierwsi
             </div>
             <div style={{
               padding: 16, borderRadius: 12,
