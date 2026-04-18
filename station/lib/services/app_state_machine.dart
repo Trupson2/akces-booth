@@ -60,10 +60,14 @@ class AppStateMachine extends ChangeNotifier {
   Timer? _countdownTicker;
   Timer? _timeoutGuard;
 
-  static const Duration recordingDuration = Duration(seconds: 8);
-  static const Duration processingDuration = Duration(seconds: 10);
-  static const Duration transferDuration = Duration(seconds: 5);
-  static const Duration uploadingDuration = Duration(seconds: 5);
+  // Czasy dla mock mode (brak Recordera) - szybsze niz real flow zeby
+  // developerski test klik START -> QR zajmowal ~13s zamiast 28s.
+  // Real mode (Recorder polaczony) uzywa prawdziwych eventow z WS,
+  // te timery sa tylko safety/fallback.
+  static const Duration recordingDuration = Duration(seconds: 6);
+  static const Duration processingDuration = Duration(seconds: 3);
+  static const Duration transferDuration = Duration(seconds: 2);
+  static const Duration uploadingDuration = Duration(seconds: 2);
   static const Duration qrDisplayDuration = Duration(seconds: 60);
   static const Duration thankYouDuration = Duration(seconds: 3);
 

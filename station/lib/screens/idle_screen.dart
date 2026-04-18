@@ -67,16 +67,15 @@ class IdleScreen extends StatelessWidget {
                     ],
                   ),
 
-                  // Greeting - dominuje ekran, ale zawsze sie miesci
-                  const Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Center(child: _Greeting()),
-                    ),
-                  ),
+                  // Greeting bezposrednio pod status dotami (nie tak wysoko
+                  // jak Expanded + Align.topCenter by centrowalo, bo wizualnie
+                  // ludzik gubil sie w pustce). Nad START zostaje malo miejsca
+                  // zeby wszystko bylo w gornej polowie ekranu.
+                  const SizedBox(height: 4),
+                  const _Greeting(),
+                  const SizedBox(height: 12),
 
-                  // Duzy START na dole - wysokosc skalowana od ekranu
-                  // (na Tab A11+ 800px wysokosci daje ~130, na telefonie ~90).
+                  // Duzy START tuz pod greeting, bez rozciagania Spacer'em.
                   LayoutBuilder(
                     builder: (context, _) {
                       final screenH = MediaQuery.of(context).size.height;
@@ -91,21 +90,16 @@ class IdleScreen extends StatelessWidget {
                       );
                     },
                   ),
-                  const SizedBox(height: 16),
+                  // Spacer rozpycha footer na sam dol, greeting+start
+                  // zostaja w gornej polowie ekranu.
+                  const Spacer(),
 
-                  // Footer: Akces 360 logo (long-press 3s -> PIN -> Settings)
+                  // Footer: tylko Akces 360 logo (long-press 3s = sekretne
+                  // wejscie do Settings - gosc nie widzi hintu).
                   Row(
                     children: [
                       _AkcesLogoGate(),
                       const Spacer(),
-                      Text(
-                        'Przytrzymaj logo 3s zeby wejsc do Settings',
-                        style: TextStyle(
-                          color: AppTheme.muted.withValues(alpha: 0.55),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
                     ],
                   ),
                 ],
@@ -125,47 +119,48 @@ class _Greeting extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Ilustracja + tekst - ilustracja jako support, naglowek dominuje.
-        // 'Wejdz na platforme' to primary CTA dla goscia, musi byc wyrazny.
-        final h = constraints.maxHeight;
-        final illustrationSize = (h * 0.42).clamp(140.0, 260.0);
+        // Ilustracja + tekst w natural size - kompakt zeby Column
+        // + START button zmiescili sie w wysokosci viewportu (w landscape
+        // OnePlus/Tab maja ~500-800 px wysokosci uzytecznej).
+        final screenH = MediaQuery.of(context).size.height;
+        final illustrationSize = (screenH * 0.28).clamp(110.0, 220.0);
+        final headlineFontSize = (screenH * 0.07).clamp(28.0, 44.0);
+        final subFontSize = (screenH * 0.025).clamp(12.0, 16.0);
 
-        return FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Ilustracja z Claude Design (Pakiet D)
-              Image.asset(
-                'assets/illustrations/idle.png',
-                width: illustrationSize,
-                height: illustrationSize,
-                fit: BoxFit.contain,
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            // Ilustracja z Claude Design (Pakiet D)
+            Image.asset(
+              'assets/illustrations/idle.png',
+              width: illustrationSize,
+              height: illustrationSize,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Wejdz na platforme',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: headlineFontSize,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -1.2,
+                height: 1.0,
               ),
-              const SizedBox(height: 12),
-              const Text(
-                'Wejdz na platforme',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 64,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -1.5,
-                  height: 1.0,
-                ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Usmiech, pozycja, klik START',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppTheme.muted,
+                fontSize: subFontSize,
+                fontWeight: FontWeight.w500,
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'Usmiech, pozycja, klik START',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppTheme.muted,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );
