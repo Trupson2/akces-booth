@@ -98,11 +98,15 @@ class _ThankYouScreenState extends State<ThankYouScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Ilustracja dziadek + wnuk z fotobudka
+                      // Ilustracja dziadek + wnuk z fotobudka.
+                      // Bazuje na mniejszym wymiarze (min(w, h)) zeby byla
+                      // proporcjonalna i na telefonie (w landscape ma malo h)
+                      // i na tablecie (Tab A11+ landscape da duzo wiecej).
                       LayoutBuilder(
                         builder: (context, _) {
-                          final h = MediaQuery.of(context).size.height;
-                          final size = (h * 0.5).clamp(240.0, 420.0);
+                          final mq = MediaQuery.of(context).size;
+                          final minSide = mq.width < mq.height ? mq.width : mq.height;
+                          final size = (minSide * 0.75).clamp(280.0, 600.0);
                           return SizedBox(
                             width: size,
                             height: size,

@@ -125,10 +125,10 @@ class _Greeting extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Ilustracja skalowana proporcjonalnie do dostepnego miejsca - nie
-        // dominuje ekranu, ale jest widoczna (większa niż stare emoji 👋).
+        // Ilustracja + tekst - ilustracja jako support, naglowek dominuje.
+        // 'Wejdz na platforme' to primary CTA dla goscia, musi byc wyrazny.
         final h = constraints.maxHeight;
-        final illustrationSize = (h * 0.55).clamp(180.0, 360.0);
+        final illustrationSize = (h * 0.42).clamp(140.0, 260.0);
 
         return FittedBox(
           fit: BoxFit.scaleDown,
@@ -142,24 +142,25 @@ class _Greeting extends StatelessWidget {
                 height: illustrationSize,
                 fit: BoxFit.contain,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               const Text(
                 'Wejdz na platforme',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 36,
+                  fontSize: 64,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: -0.5,
+                  letterSpacing: -1.5,
+                  height: 1.0,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 8),
               const Text(
                 'Usmiech, pozycja, klik START',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: AppTheme.muted,
-                  fontSize: 14,
+                  fontSize: 18,
                   fontWeight: FontWeight.w500,
                 ),
               ),
