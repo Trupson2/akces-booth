@@ -20,10 +20,11 @@ def _rate_limit_key() -> str:
 
 
 # Globalny Limiter - inicjalizacja przez limiter.init_app(app) w create_app().
-# Default: 200/hour per IP dla calej app. Per-route mozna nadpisac dekoratorem.
+# Config (storage, strategy) ustawiamy w app.config (Flask-Limiter preferuje
+# tak gdy uzywany jest init_app pattern, nie konstruktor).
+# Default: 200/hour per IP dla calej app. Per-route nadpisuje dekoratorem.
 limiter = Limiter(
     key_func=_rate_limit_key,
     default_limits=["200 per hour"],
-    storage_uri="memory://",
-    strategy="fixed-window",
+    headers_enabled=True,  # dodaje X-RateLimit-* do responses - debug friendly
 )
