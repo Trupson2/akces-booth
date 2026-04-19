@@ -52,10 +52,11 @@ def _build_imagen_prompt(*, event_type: str, style: str, theme: str,
     return (
         f"Transparent PNG 1080x1920 portrait photo booth overlay for {event_type}. "
         f"Style: {style}. Theme: {theme or 'elegant'}. "
-        f"THIN decorative border at the edges only (top, bottom, corners), max 8%% "
-        f"of image width. Center 75%% x 80%% area completely empty/transparent so "
-        f"video fully appears there. Names: {names} at TOP. Date: {event_date} at BOTTOM. "
-        f"Minimal, elegant, not cluttered. No large central ornaments. No inner frame lines."
+        f"Decorative border at the edges (top, bottom, corners, sides) with "
+        f"MEDIUM thickness 10-15%% of image width. Center 65%% x 70%% area "
+        f"completely empty so video appears there. Names: {names} at TOP band. "
+        f"Date: {event_date} at BOTTOM band. Elegant, substantial ornaments - "
+        f"not too thin, not too chunky. No inner frame lines crossing center."
     )
 
 
@@ -80,16 +81,18 @@ def _refine_prompt_with_gemini(**kwargs: str) -> str:
                 f"Date: {kwargs['event_date']}\n\n"
                 "CRITICAL requirements:\n"
                 "- Transparent PNG 1080x1920 PORTRAIT orientation (taller than wide)\n"
-                "- THIN decorative border only, maximum 8% of image width - NOT chunky\n"
-                "- Center area 75%% width x 80%% height must be COMPLETELY EMPTY\n"
+                "- Decorative border on all 4 edges, MEDIUM thickness - occupies "
+                "10-15%% of image width on each side (not thin threads, not chunky\n"
+                "  walls). Substantial but airy.\n"
+                "- Center area 65%% width x 70%% height must be COMPLETELY EMPTY\n"
                 "  (video will appear there - do not put anything in the middle)\n"
-                "- Decorations only on edges: thin corner ornaments, delicate side lines\n"
-                "- Names at TOP (above video area), date at BOTTOM (below video area)\n"
+                "- Decorations: ornate corners + flowing side borders + top/bottom bands\n"
+                "- Names at TOP band (above video area, centered)\n"
+                "- Date at BOTTOM band (below video area, centered)\n"
                 "- Elegant typography, medium size (not gigantic)\n"
-                "- Minimalist, airy composition - leave lots of transparent space\n"
                 f"- Style matches {kwargs['style']} aesthetic\n"
-                "- NO central ornaments, NO inner rectangle frame lines\n"
-                "- Output pose: vertical/portrait layout (phone aspect ratio)\n\n"
+                "- NO central ornaments crossing video area, NO inner rectangle frame lines\n"
+                "- Output orientation: PORTRAIT / vertical (phone aspect 9:16)\n\n"
                 "Output ONLY the image generation prompt, no explanation, no markdown."
             ),
         )
@@ -158,14 +161,22 @@ def make_frame_transparent(
     center_width_frac: float = 0.60,
     center_height_frac: float = 0.55,
     feather_px: int = 20,
+    white_key: bool = True,
+    white_brightness: int = 235,
+    white_saturation: float = 0.12,
 ) -> bytes:
-    """Post-process ramki: resize do portrait output dims, wycina transparentne
-    centrum (zeby video bylo widoczne przez srodek) z feathered edge (zeby
-    przejscie nie bylo ostre).
+    """Post-process ramki: resize do portrait output + transparentne centrum +
+    opcjonalny color-key bieli (Gemini zwraca RGB z bialym tlem wokol
+    ornamentow, bez chroma key bialy kwadrat otacza ornamenty na calej ramce).
 
     - out_width/out_height: rozdzielczosc docelowa (1080x1920 portrait dla video)
-    - center_*_frac: jaka czesc powierzchni zostaje transparentna
-    - feather_px: promien Gaussian blur na krawedzi maski (smooth)
+    - center_*_frac: jaka czesc powierzchni kwadratu w srodku jest cut transparent
+    - feather_px: promien Gaussian blur na krawedzi kwadratu (smooth)
+    - white_key: gdy True, jasne + nie-nasycone pixele (bialo/kremowe tlo) daja
+      alpha=0 zostawiajac tylko nasycone ornamenty (zloto/srebro/kolory)
+    - white_brightness: min RGB max-channel uznane za "bialy" (0-255)
+    - white_saturation: max saturation (0-1) uznana za "bialy" (0.12 = bardzo
+      malo nasycone)
     """
     if not _HAVE_PIL:
         log.warning("PIL not available - zwracam oryginal bez post-processingu")
@@ -189,6 +200,31 @@ def make_frame_transparent(
         mask = mask.filter(ImageFilter.GaussianBlur(radius=feather_px))
 
     img.putalpha(mask)
+
+    # Color-key bieli: usun bialo/kremowe tlo zostawiajac tylko ornamenty.
+    if white_key:
+        try:
+            import numpy as np  # noqa: WPS433 (inline import - scipy heavy)
+            arr = np.array(img)  # shape (H, W, 4) uint8
+            r = arr[..., 0].astype(np.int16)
+            g = arr[..., 1].astype(np.int16)
+            b = arr[..., 2].astype(np.int16)
+            max_ch = np.maximum(np.maximum(r, g), b)
+            min_ch = np.minimum(np.minimum(r, g), b)
+            # Saturation w przyblizeniu HSV: (max-min)/max
+            sat = np.where(max_ch > 0,
+                           (max_ch - min_ch) / np.maximum(max_ch, 1),
+                           0)
+            white_mask = (max_ch >= white_brightness) & (sat <= white_saturation)
+            # Wyzeruj alpha tam gdzie white (pamieta ze alpha byla z putalpha
+            # powyzej - teraz dodatkowo wycinamy bialo-kremowe tlo).
+            arr[..., 3] = np.where(white_mask, 0, arr[..., 3]).astype(np.uint8)
+            img = Image.fromarray(arr, mode="RGBA")
+        except ImportError:
+            log.warning("numpy not available - skipping white key")
+        except Exception as e:  # noqa: BLE001
+            log.warning("white key failed: %s", e)
+
     out = io.BytesIO()
     # optimize=True powoduje '_idat has no attribute fileno' z BytesIO na
     # niektorych Pillow + Python 3.13. Bez optimize dziala stabilnie.

@@ -355,18 +355,17 @@ class VideoProcessor extends ChangeNotifier {
         break;
     }
 
-    // Overlay PNG (opcjonalnie). Doskalowujemy do rozdzielczosci video
-    // zachowujac aspect ratio (force_original_aspect_ratio=decrease),
-    // reszte paddingujemy transparentnym kanalem alpha, zeby PNG centrowal
-    // sie na video niezaleznie od proporcji.
+    // Overlay PNG (opcjonalnie). Rozciagamy na dokladne wymiary video -
+    // zawsze wypelnia ekran 100%. PNG generowany jest portrait 1080x1920
+    // (taki sam aspect jak video), wiec stretch nie deformuje zauwazalnie.
+    // Dla nietypowych aspect ratio akceptujemy minimalne rozciagniecie
+    // na rzecz pewnosci ze ramka jest dopasowana do calego obrazu.
     if (hasOverlay) {
       // Input indices: 0=video, 1=music (jesli jest), 2=overlay (lub 1 gdy brak music).
       final ovIdx = (config.musicPath != null) ? 2 : 1;
       final w = videoDims.width;
       final h = videoDims.height;
-      parts.add('[$ovIdx:v]format=rgba,'
-          'scale=$w:$h:force_original_aspect_ratio=decrease,'
-          'pad=$w:$h:(ow-iw)/2:(oh-ih)/2:color=0x00000000[ovfit]');
+      parts.add('[$ovIdx:v]format=rgba,scale=$w:$h[ovfit]');
       parts.add('$currentLabel[ovfit]overlay=0:0[ov]');
       currentLabel = '[ov]';
     }
