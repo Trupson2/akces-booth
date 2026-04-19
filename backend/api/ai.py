@@ -4,8 +4,10 @@ Flow:
 1. Uzytkownik wypelnia formularz (typ eventu, styl, motyw, imiona, data).
 2. Gemini 2.5 Pro generuje prompt dla image model.
 3. gemini-2.5-flash-image generuje N wariantow ramek PNG.
-4. Zapisujemy w `storage/overlays/ai_*.png` + wpisy w library_overlays.
-5. Zwracamy JSON z lista wariantow.
+4. Post-process: doskalowanie do 1080x1920 portrait + cutout transparentnego
+   centrum (Gemini daje RGB bez alphy, my go robimy RGBA z dziura).
+5. Zapisujemy w `storage/overlays/ai_*.png` + wpisy w library_overlays.
+6. Zwracamy JSON z lista wariantow.
 
 Uzywamy nowego `google-genai` pakietu (starszy `google-generativeai`
 zostal zdeprecjonowany w pazdzierniku 2025).
@@ -13,6 +15,7 @@ zostal zdeprecjonowany w pazdzierniku 2025).
 from __future__ import annotations
 
 import base64
+import io
 import logging
 import uuid
 from pathlib import Path
@@ -23,6 +26,12 @@ from flask import Blueprint, jsonify, request
 import models
 from admin.auth import require_admin
 from config import Config
+
+try:
+    from PIL import Image, ImageDraw, ImageFilter
+    _HAVE_PIL = True
+except ImportError:
+    _HAVE_PIL = False
 
 log = logging.getLogger(__name__)
 
@@ -134,6 +143,50 @@ def _generate_images(prompt: str, count: int = 3) -> list[bytes]:
     return images
 
 
+def make_frame_transparent(
+    png_bytes: bytes,
+    *,
+    out_width: int = 1080,
+    out_height: int = 1920,
+    center_width_frac: float = 0.72,
+    center_height_frac: float = 0.78,
+    feather_px: int = 60,
+) -> bytes:
+    """Post-process ramki: resize do portrait output dims, wycina transparentne
+    centrum (zeby video bylo widoczne przez srodek) z feathered edge (zeby
+    przejscie nie bylo ostre).
+
+    - out_width/out_height: rozdzielczosc docelowa (1080x1920 portrait dla video)
+    - center_*_frac: jaka czesc powierzchni zostaje transparentna
+    - feather_px: promien Gaussian blur na krawedzi maski (smooth)
+    """
+    if not _HAVE_PIL:
+        log.warning("PIL not available - zwracam oryginal bez post-processingu")
+        return png_bytes
+
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+    img = img.resize((out_width, out_height), Image.Resampling.LANCZOS)
+
+    # Alpha mask: bialy = opaque, czarny = transparent.
+    mask = Image.new("L", (out_width, out_height), 255)
+    draw = ImageDraw.Draw(mask)
+    cw = int(out_width * center_width_frac)
+    ch = int(out_height * center_height_frac)
+    x0 = (out_width - cw) // 2
+    y0 = (out_height - ch) // 2
+    draw.rectangle([x0, y0, x0 + cw, y0 + ch], fill=0)
+
+    # Feather edge przez Gaussian blur zeby przejscie bylo miekkie
+    # (bez tego video "odcina" sie ostra krawedzia od ramki).
+    if feather_px > 0:
+        mask = mask.filter(ImageFilter.GaussianBlur(radius=feather_px))
+
+    img.putalpha(mask)
+    out = io.BytesIO()
+    img.save(out, format="PNG", optimize=True)
+    return out.getvalue()
+
+
 @ai_bp.route("/generate-overlays", methods=["POST"])
 @require_admin
 def generate_overlays():  # type: ignore[no-untyped-def]
@@ -175,7 +228,15 @@ def generate_overlays():  # type: ignore[no-untyped-def]
     for i, img_bytes in enumerate(images):
         filename = f"ai_{uuid.uuid4().hex[:10]}.png"
         path = overlay_dir / filename
-        path.write_bytes(img_bytes)
+        # Gemini daje RGB PNG - my doskalowujemy do 1080x1920 portrait
+        # i robimy transparentne centrum, zeby bylo to realne "ramka" a nie
+        # nieprzezroczysty prostokat zakrywajacy video.
+        try:
+            processed = make_frame_transparent(img_bytes)
+        except Exception as e:  # noqa: BLE001
+            log.warning("Post-processing failed, saving raw: %s", e)
+            processed = img_bytes
+        path.write_bytes(processed)
         overlay_name = f"{names} {style} v{i+1}".strip()
         # Zapisujemy path relative do BASE_DIR jesli mozliwe, inaczej absolute.
         try:

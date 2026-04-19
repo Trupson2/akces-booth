@@ -10,6 +10,33 @@ from config import Config
 events_bp = Blueprint("events", __name__)
 
 
+def _file_version_for_overlay(overlay_id: int) -> int | None:
+    """mtime pliku overlay -> int epoch. Uzywane do cache-bust w URL."""
+    from pathlib import Path as _Path
+    for ov in models.list_overlays(Config.DB_PATH):
+        if ov["id"] == overlay_id:
+            p = _Path(ov["file_path"])
+            if not p.is_absolute():
+                p = Config.BASE_DIR / p
+            if p.exists():
+                return int(p.stat().st_mtime)
+            break
+    return None
+
+
+def _file_version_for_music(music_id: int) -> int | None:
+    from pathlib import Path as _Path
+    for tr in models.list_music(Config.DB_PATH):
+        if tr["id"] == music_id:
+            p = _Path(tr["file_path"])
+            if not p.is_absolute():
+                p = Config.BASE_DIR / p
+            if p.exists():
+                return int(p.stat().st_mtime)
+            break
+    return None
+
+
 @events_bp.route("/", methods=["GET"])
 @require_admin
 def list_events_api():  # type: ignore[no-untyped-def]
@@ -27,15 +54,23 @@ def active_event_api():  # type: ignore[no-untyped-def]
     videos = models.list_videos_for_event(Config.DB_PATH, e["id"])
     video_count = len(videos)
 
+    # Cache-bust: Recorder cachuje po url hashCode, zeby re-pobral kiedy
+    # admin zaktualizuje obrazek doklejamy ?v=<mtime>.
+    from pathlib import Path as _Path
+
     overlay_url = None
     if e.get("overlay_id"):
-        overlay_url = f"{Config.PUBLIC_BASE_URL}/api/events/overlay/{e['overlay_id']}"
+        base = f"{Config.PUBLIC_BASE_URL}/api/events/overlay/{e['overlay_id']}"
+        ver = _file_version_for_overlay(int(e["overlay_id"]))
+        overlay_url = f"{base}?v={ver}" if ver else base
 
     music_url = None
     music_offset_sec: float | None = None
     music_offset_mode: str | None = None
     if e.get("music_id"):
-        music_url = f"{Config.PUBLIC_BASE_URL}/api/events/music/{e['music_id']}"
+        base = f"{Config.PUBLIC_BASE_URL}/api/events/music/{e['music_id']}"
+        ver = _file_version_for_music(int(e["music_id"]))
+        music_url = f"{base}?v={ver}" if ver else base
         track = models.get_music(Config.DB_PATH, int(e["music_id"]))
         if track:
             music_offset_sec = models.resolve_music_offset(track)
