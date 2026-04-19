@@ -50,10 +50,12 @@ def _build_imagen_prompt(*, event_type: str, style: str, theme: str,
                         names: str, event_date: str) -> str:
     """Fallback prompt jesli Gemini nie odpowie."""
     return (
-        f"Transparent PNG 1920x1080 photo booth overlay for {event_type}. "
-        f"Style: {style}. Decorative edges only, center 60% empty. "
-        f"Names: {names}. Date: {event_date}. Theme: {theme or 'elegant'}. "
-        f"Elegant typography, no borders inside central area."
+        f"Transparent PNG 1080x1920 portrait photo booth overlay for {event_type}. "
+        f"Style: {style}. Theme: {theme or 'elegant'}. "
+        f"THIN decorative border at the edges only (top, bottom, corners), max 8%% "
+        f"of image width. Center 75%% x 80%% area completely empty/transparent so "
+        f"video fully appears there. Names: {names} at TOP. Date: {event_date} at BOTTOM. "
+        f"Minimal, elegant, not cluttered. No large central ornaments. No inner frame lines."
     )
 
 
@@ -76,13 +78,18 @@ def _refine_prompt_with_gemini(**kwargs: str) -> str:
                 f"Theme: {kwargs.get('theme') or '(none)'}\n"
                 f"Names/Brand: {kwargs['names']}\n"
                 f"Date: {kwargs['event_date']}\n\n"
-                "Requirements:\n"
-                "- Transparent PNG 1920x1080 landscape\n"
-                "- Center 60% area must be empty (video appears there)\n"
-                "- Decorations only on edges: corners, top/bottom borders\n"
-                "- Elegant typography with names clearly visible\n"
+                "CRITICAL requirements:\n"
+                "- Transparent PNG 1080x1920 PORTRAIT orientation (taller than wide)\n"
+                "- THIN decorative border only, maximum 8% of image width - NOT chunky\n"
+                "- Center area 75%% width x 80%% height must be COMPLETELY EMPTY\n"
+                "  (video will appear there - do not put anything in the middle)\n"
+                "- Decorations only on edges: thin corner ornaments, delicate side lines\n"
+                "- Names at TOP (above video area), date at BOTTOM (below video area)\n"
+                "- Elegant typography, medium size (not gigantic)\n"
+                "- Minimalist, airy composition - leave lots of transparent space\n"
                 f"- Style matches {kwargs['style']} aesthetic\n"
-                "- Suitable for professional photo booth rental\n\n"
+                "- NO central ornaments, NO inner rectangle frame lines\n"
+                "- Output pose: vertical/portrait layout (phone aspect ratio)\n\n"
                 "Output ONLY the image generation prompt, no explanation, no markdown."
             ),
         )

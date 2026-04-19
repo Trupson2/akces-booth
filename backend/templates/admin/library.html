@@ -21,9 +21,14 @@
     </div>
     <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
       {% for o in overlays %}
+        {% set _ov_src = '/storage/' ~ (o.file_path.split('storage/')[-1] if 'storage/' in o.file_path else o.file_path) %}
         <div class="bg-slate-900 rounded-lg overflow-hidden group relative">
-          <img src="/storage/{{ o.file_path.split('storage/')[-1] if 'storage/' in o.file_path else o.file_path }}"
-               class="w-full aspect-video object-contain bg-checker">
+          <img src="{{ _ov_src }}"
+               data-full-src="{{ _ov_src }}"
+               data-name="{{ o.name }}"
+               onclick="openLightbox(this)"
+               class="w-full aspect-video object-contain bg-checker cursor-zoom-in
+                      transition hover:opacity-80">
           <div class="p-2">
             <div class="text-xs font-semibold truncate">{{ o.name }}</div>
             <div class="text-[10px] text-slate-400">{{ o.source }}</div>
@@ -41,6 +46,24 @@
       {% endfor %}
     </div>
   </section>
+
+  <!-- Lightbox - podglad ramki w pelnym rozmiarze -->
+  <div id="lightbox"
+       class="hidden fixed inset-0 z-50 bg-black/90 items-center justify-center p-6"
+       onclick="closeLightbox(event)">
+    <div class="relative max-w-4xl max-h-[90vh] flex flex-col items-center">
+      <img id="lightbox-img" src="" alt=""
+           class="max-w-full max-h-[80vh] object-contain bg-checker rounded-lg shadow-2xl"
+           onclick="event.stopPropagation()">
+      <div id="lightbox-caption"
+           class="mt-3 text-white text-sm font-semibold"></div>
+      <button onclick="closeLightbox()"
+              class="absolute -top-3 -right-3 bg-red-600 hover:bg-red-700
+                     w-9 h-9 rounded-full text-white text-lg font-bold shadow-lg">
+        ✕
+      </button>
+    </div>
+  </div>
 
   <!-- MUSIC -->
   <section class="bg-slate-800 rounded-xl p-5">
@@ -149,6 +172,30 @@
     const r = await fetch('/api/library/music/' + id, { method: 'DELETE' });
     if (r.ok) location.reload();
   }
+
+  // Lightbox dla ramek - klik otwiera pelny rozmiar na tle.
+  function openLightbox(imgEl) {
+    const box = document.getElementById('lightbox');
+    const img = document.getElementById('lightbox-img');
+    const cap = document.getElementById('lightbox-caption');
+    img.src = imgEl.dataset.fullSrc || imgEl.src;
+    cap.textContent = imgEl.dataset.name || '';
+    box.classList.remove('hidden');
+    box.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeLightbox(e) {
+    // Klik na IMG nie zamyka (stopPropagation w HTML). Klik na tlo zamyka.
+    if (e && e.target && e.target.id === 'lightbox-img') return;
+    const box = document.getElementById('lightbox');
+    box.classList.add('hidden');
+    box.classList.remove('flex');
+    document.body.style.overflow = '';
+  }
+  // ESC zamyka lightbox.
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeLightbox();
+  });
 
   function _highlightMode(id, mode) {
     const group = document.querySelector(`[data-mode-group="${id}"]`);
