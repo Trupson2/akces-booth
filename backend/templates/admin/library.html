@@ -67,13 +67,31 @@
 
   <!-- MUSIC -->
   <section class="bg-slate-800 rounded-xl p-5">
-    <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
       <h2 class="font-bold text-lg">🎵 Muzyka</h2>
-      <label class="bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded cursor-pointer text-sm">
-        + Upload MP3
-        <input type="file" accept="audio/*" class="hidden" onchange="uploadMusic(this.files[0])">
-      </label>
+      <div class="flex gap-2 text-sm">
+        <button onclick="analyzeAllMissing()"
+                class="bg-purple-700 hover:bg-purple-600 px-3 py-1.5 rounded text-white"
+                title="Analiza AI viral na wszystkich utworach bez wyniku">
+          🤖 Analizuj wszystkie
+        </button>
+        <button onclick="setAllMode('ai')"
+                class="bg-purple-900 hover:bg-purple-700 px-3 py-1.5 rounded text-white"
+                title="Przełącz wszystkie utwory na tryb AI viral (wymaga wczesniejszej analizy)">
+          ⚡ Wszystkie → AI
+        </button>
+        <button onclick="setAllMode('default_30s')"
+                class="bg-indigo-900 hover:bg-indigo-700 px-3 py-1.5 rounded text-white"
+                title="Reset wszystkich na domyslne 30s">
+          ↺ Wszystkie → 30s
+        </button>
+        <label class="bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded cursor-pointer text-white">
+          + Upload MP3
+          <input type="file" accept="audio/*" class="hidden" onchange="uploadMusic(this.files[0])">
+        </label>
+      </div>
     </div>
+    <div id="bulk-progress" class="hidden mb-2 text-xs text-slate-300"></div>
     <ul class="divide-y divide-slate-700">
       {% for m in music %}
         <li class="py-3" data-music-id="{{ m.id }}">
@@ -171,6 +189,96 @@
     if (!confirm('Usunac?')) return;
     const r = await fetch('/api/library/music/' + id, { method: 'DELETE' });
     if (r.ok) location.reload();
+  }
+
+  // Bulk operacje na muzyce - analizuj wszystkie / ustaw tryb wszystkim.
+  async function analyzeAllMissing() {
+    const items = [...document.querySelectorAll('[data-music-id]')].map(el => ({
+      id: parseInt(el.dataset.musicId, 10),
+      statusEl: el.querySelector('[data-status]'),
+    })).filter(it => !Number.isNaN(it.id));
+    // Sprawdzamy aktualne statusy z serwera (karta moze byc przestarzala).
+    const bar = document.getElementById('bulk-progress');
+    bar.classList.remove('hidden');
+    bar.textContent = `Start: pobieram statusy ${items.length} utworów...`;
+    const needed = [];
+    for (const it of items) {
+      const r = await fetch(`/api/library/music/${it.id}`);
+      if (!r.ok) continue;
+      const d = await r.json();
+      if (d.analysis_status !== 'success' || d.viral_offset_sec == null) {
+        needed.push(it);
+      }
+    }
+    if (needed.length === 0) {
+      bar.textContent = `✓ Wszystkie ${items.length} utworów juz przeanalizowane`;
+      setTimeout(() => bar.classList.add('hidden'), 3000);
+      return;
+    }
+    bar.textContent = `Do analizy: ${needed.length} z ${items.length}. Leci...`;
+    let done = 0;
+    let failed = 0;
+    // Serial - nie blokujmy Pi librosa JIT na raz.
+    for (const it of needed) {
+      if (it.statusEl) {
+        it.statusEl.textContent = '⟳ analiza...';
+        it.statusEl.className = 'text-amber-300';
+      }
+      const r = await fetch(`/api/library/music/${it.id}/analyze`, { method: 'POST' });
+      if (!r.ok) { failed++; continue; }
+      // Poll az skonczy (max 90s per track - Pi numba JIT cold + hot).
+      let ok = false;
+      for (let attempt = 0; attempt < 45; attempt++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const s = await fetch(`/api/library/music/${it.id}`);
+        if (!s.ok) continue;
+        const sd = await s.json();
+        if (sd.analysis_status === 'success' && sd.viral_offset_sec != null) {
+          if (it.statusEl) {
+            it.statusEl.innerHTML = 'AI: <b class="text-purple-300">' +
+              sd.viral_offset_sec.toFixed(1) + 's</b>';
+            it.statusEl.className = '';
+          }
+          _highlightMode(it.id, sd.offset_mode);
+          ok = true;
+          break;
+        }
+        if (sd.analysis_status === 'failed') {
+          if (it.statusEl) {
+            it.statusEl.textContent = '✗ blad';
+            it.statusEl.className = 'text-red-400';
+          }
+          break;
+        }
+      }
+      if (ok) done++; else failed++;
+      bar.textContent = `Postęp: ${done}/${needed.length} ok, ${failed} fail`;
+    }
+    bar.textContent = `✓ Gotowe: ${done} analizowanych, ${failed} fail`;
+    setTimeout(() => bar.classList.add('hidden'), 5000);
+  }
+
+  async function setAllMode(mode) {
+    if (!confirm(`Przelaczyc wszystkie utwory na ${mode}?`)) return;
+    const items = [...document.querySelectorAll('[data-music-id]')].map(el =>
+      parseInt(el.dataset.musicId, 10)).filter(x => !Number.isNaN(x));
+    const bar = document.getElementById('bulk-progress');
+    bar.classList.remove('hidden');
+    let done = 0;
+    for (const id of items) {
+      const r = await fetch(`/api/library/music/${id}/offset-mode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      if (r.ok) {
+        _highlightMode(id, mode);
+        done++;
+      }
+      bar.textContent = `Set mode: ${done}/${items.length}`;
+    }
+    bar.textContent = `✓ Ustawiono ${mode} na ${done}/${items.length}`;
+    setTimeout(() => bar.classList.add('hidden'), 3000);
   }
 
   // Lightbox dla ramek - klik otwiera pelny rozmiar na tle.
