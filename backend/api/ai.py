@@ -183,7 +183,9 @@ def make_frame_transparent(
 
     img.putalpha(mask)
     out = io.BytesIO()
-    img.save(out, format="PNG", optimize=True)
+    # optimize=True powoduje '_idat has no attribute fileno' z BytesIO na
+    # niektorych Pillow + Python 3.13. Bez optimize dziala stabilnie.
+    img.save(out, format="PNG")
     return out.getvalue()
 
 
