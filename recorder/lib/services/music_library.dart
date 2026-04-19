@@ -25,8 +25,9 @@ import 'package:path_provider/path_provider.dart';
 class MusicLibrary extends ChangeNotifier {
   MusicLibrary();
 
-  /// 50 tracks polskiej playlisty weselnej 2026.
-  /// MusicLibrary pominie te ktorych brak w assets (graceful skip).
+  /// Polska playlista weselna 2026 - ~100 tracks.
+  /// MusicLibrary pominie te ktorych brak w assets (graceful skip), wiec
+  /// dziur w numerach (np. 11, 15, 16) nie trzeba usuwac z listy.
   static const List<String> knownTracks = [
     // Top Pop & Radiowe 1-10
     'track_01.webm', 'track_02.webm', 'track_03.webm', 'track_04.webm',
@@ -48,6 +49,30 @@ class MusicLibrary extends ChangeNotifier {
     'track_41.webm', 'track_42.webm', 'track_43.webm', 'track_44.webm',
     'track_45.webm', 'track_46.webm', 'track_47.webm', 'track_48.webm',
     'track_49.webm', 'track_50.webm',
+    // Nowoczesne Disco & Viral Mlode Pokolenie 51-60
+    'track_51.webm', 'track_52.webm', 'track_53.webm', 'track_54.webm',
+    'track_55.webm', 'track_56.webm', 'track_57.webm', 'track_58.webm',
+    'track_59.webm', 'track_60.webm',
+    // Polskie Legendy w Klubowym Wydaniu 61-70
+    'track_61.webm', 'track_62.webm', 'track_63.webm', 'track_64.webm',
+    'track_65.webm', 'track_66.webm', 'track_67.webm', 'track_68.webm',
+    'track_69.webm', 'track_70.webm',
+    // Disco Polo Nowa Fala & Klasyka 71-80
+    'track_71.webm', 'track_72.webm', 'track_73.webm', 'track_74.webm',
+    'track_75.webm', 'track_76.webm', 'track_77.webm', 'track_78.webm',
+    'track_79.webm', 'track_80.webm',
+    // Rock & Biesiada Max Energii 81-90
+    'track_81.webm', 'track_82.webm', 'track_83.webm', 'track_84.webm',
+    'track_85.webm', 'track_86.webm', 'track_87.webm', 'track_88.webm',
+    'track_89.webm', 'track_90.webm',
+    // Pop & Dance Smooth & Energetic 91-100
+    'track_91.webm', 'track_92.webm', 'track_93.webm', 'track_94.webm',
+    'track_95.webm', 'track_96.webm', 'track_97.webm', 'track_98.webm',
+    'track_99.webm', 'track_100.webm',
+    // Must-Have Fotobudka 360 Drops & Bass 101-110
+    'track_101.webm', 'track_102.webm', 'track_103.webm', 'track_104.webm',
+    'track_105.webm', 'track_106.webm', 'track_107.webm', 'track_108.webm',
+    'track_109.webm', 'track_110.webm',
   ];
 
   final List<String> _cachedPaths = [];
