@@ -64,7 +64,7 @@ class AppStateMachine extends ChangeNotifier {
   // developerski test klik START -> QR zajmowal ~13s zamiast 28s.
   // Real mode (Recorder polaczony) uzywa prawdziwych eventow z WS,
   // te timery sa tylko safety/fallback.
-  static const Duration recordingDuration = Duration(seconds: 6);
+  static const Duration recordingDuration = Duration(seconds: 16);
   static const Duration processingDuration = Duration(seconds: 3);
   static const Duration transferDuration = Duration(seconds: 2);
   static const Duration uploadingDuration = Duration(seconds: 2);
@@ -76,8 +76,8 @@ class AppStateMachine extends ChangeNotifier {
   //
   // Bardzo hojne wartosci zeby nie wyrzucac uzytkownika przy chwilowym lagu,
   // ale krotsze niz "30 min wisi PROCESSING i nikt nie wie co sie dzieje".
-  static const Duration recordingMaxDuration = Duration(seconds: 20);    // 8s + 12s bufora
-  static const Duration processingMaxDuration = Duration(seconds: 45);   // Snapdragon 8 Elite robi <15s
+  static const Duration recordingMaxDuration = Duration(seconds: 30);    // 16s + 14s bufora
+  static const Duration processingMaxDuration = Duration(seconds: 60);   // boomerang z 16s = ~40s processing
   static const Duration transferMaxDuration = Duration(seconds: 90);     // 40MB na WiFi
   static const Duration uploadingMaxDuration = Duration(minutes: 5);     // duzy margines dla slabego neta
 

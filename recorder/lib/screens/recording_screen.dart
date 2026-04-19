@@ -18,8 +18,10 @@ import '../services/video_processor.dart';
 import '../theme/app_theme.dart';
 import 'preview_screen.dart';
 
-/// Maksymalna dlugosc nagrania (auto-stop).
-const Duration _kMaxRecording = Duration(seconds: 8);
+/// Maksymalna dlugosc nagrania (auto-stop). 16s = 1 pelen obrot motoru 360,
+/// wystarczajaco zeby classicBoomerang/freezeReverse daly ~32s final clip z
+/// reversem. Szybciej niz 16s = niepelny obrot, film sie ucina.
+const Duration _kMaxRecording = Duration(seconds: 16);
 
 class RecordingScreen extends StatefulWidget {
   const RecordingScreen({super.key, this.autoStart = false});

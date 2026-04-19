@@ -209,6 +209,10 @@ class VideoProcessor extends ChangeNotifier {
   }
 
   /// Wyciagnij wymiary video (W, H) ze streamu. Null gdy probe zawiedzie.
+  /// Zwracamy DISPLAY dimensions - jak MP4 ma rotation metadata 90/270 to
+  /// swapujemy w/h zeby overlay pasowal do faktycznie widocznej orientacji.
+  /// Android camera czesto zapisuje landscape 3840x2160 + rotation=90 dla
+  /// portrait recordingu - bez swapa overlay ladowal w rogu video.
   Future<_VideoDims?> _probeVideoDimensions(String path) async {
     try {
       final info = await FFprobeKit.getMediaInformation(path);
@@ -217,13 +221,39 @@ class VideoProcessor extends ChangeNotifier {
       final streams = media.getStreams();
       for (final s in streams) {
         final type = s.getType();
-        if (type == 'video') {
-          final w = s.getWidth();
-          final h = s.getHeight();
-          if (w != null && h != null && w > 0 && h > 0) {
-            return _VideoDims(w, h);
+        if (type != 'video') continue;
+        final w = s.getWidth();
+        final h = s.getHeight();
+        if (w == null || h == null || w <= 0 || h <= 0) continue;
+
+        // Detekcja rotacji - stary field 'rotate' (ffmpeg <5) i nowy
+        // side_data_list z 'Display Matrix' + rotation (ffmpeg 5+).
+        int rotation = 0;
+        final rotateStr = s.getStringProperty('rotate') ?? '';
+        final parsed = int.tryParse(rotateStr);
+        if (parsed != null) rotation = parsed;
+        if (rotation == 0) {
+          final all = s.getAllProperties();
+          if (all != null) {
+            final sdl = all['side_data_list'];
+            if (sdl is List) {
+              for (final sd in sdl) {
+                if (sd is Map && sd['rotation'] is num) {
+                  rotation = (sd['rotation'] as num).toInt();
+                  break;
+                }
+              }
+            }
           }
         }
+        final normalized = ((rotation % 360) + 360) % 360;
+        if (normalized == 90 || normalized == 270) {
+          debugPrint('[FFprobe] dims: stored ${w}x$h rotation=$normalized '
+              '-> display ${h}x$w');
+          return _VideoDims(h, w);
+        }
+        debugPrint('[FFprobe] dims: ${w}x$h rotation=$normalized');
+        return _VideoDims(w, h);
       }
       return null;
     } catch (e) {

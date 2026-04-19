@@ -148,9 +148,9 @@ def make_frame_transparent(
     *,
     out_width: int = 1080,
     out_height: int = 1920,
-    center_width_frac: float = 0.72,
-    center_height_frac: float = 0.78,
-    feather_px: int = 60,
+    center_width_frac: float = 0.60,
+    center_height_frac: float = 0.55,
+    feather_px: int = 40,
 ) -> bytes:
     """Post-process ramki: resize do portrait output dims, wycina transparentne
     centrum (zeby video bylo widoczne przez srodek) z feathered edge (zeby

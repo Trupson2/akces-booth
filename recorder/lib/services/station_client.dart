@@ -159,6 +159,14 @@ class StationClient extends ChangeNotifier {
   String get wsUrl => 'ws://${_ip ?? "0.0.0.0"}:$_port/ws';
 
   Future<void> loadAndConnect() async {
+    // Pre-populate docsDir dla sync _cachedAssetPath zeby pierwszy event_config
+    // po restart'ie mogl od razu uzywac cached overlay (bez czekania na
+    // async download i race z user klikajacym record).
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      _docsDir = dir.path;
+    } catch (_) {}
+
     _ip = await _store.loadStationIp();
     _port = await _store.loadStationPort();
     if (_ip == null || _ip!.isEmpty) {
@@ -332,24 +340,36 @@ class StationClient extends ChangeNotifier {
         case WireMsg.eventConfig:
           // Async handler - pobiera overlay/music lokalnie gdy sa dostarczone
           // jako URL-e (Station na innym urzadzeniu, lokalne sciezki Stationa
-          // tutaj nie istnieja).
-          unawaited(_handleEventConfig(msg));
+          // tutaj nie istnieja). Lapiemy bledy z future zeby pokazac co
+          // wali - unawaited by default polyka bledy.
+          _handleEventConfig(msg).catchError((Object e, StackTrace st) {
+            debugPrint('[StationClient] eventConfig handler error: $e\n$st');
+          });
           break;
         default:
           debugPrint('[StationClient] Unknown msg: ${msg['type']}');
       }
-    } catch (e) {
-      debugPrint('[StationClient] parse error: $e');
+    } catch (e, st) {
+      // Log raw bez sensitywnych danych (skroc) zeby zobaczyc co wali.
+      final preview = (raw is String ? raw : raw.toString());
+      final short = preview.length > 200
+          ? '${preview.substring(0, 200)}...<${preview.length} chars>'
+          : preview;
+      debugPrint('[StationClient] parse error: $e\nraw=$short\n$st');
     }
   }
 
   Future<void> _handleEventConfig(Map<String, dynamic> msg) async {
     final cfg = EventConfig.fromJson(msg);
+
+    // Immediately set lastEventConfig z sciezkami ze Stationa (tam gdzie
+    // istnieja na naszym urzadzeniu bedzie dzialac, tam gdzie nie - fallback
+    // na null i skip). Robimy to przed downloadem zeby uniknac race:
+    // Recorder laczy sie, dostaje event_config, user szybko klika record
+    // PRZED zakonczeniem downloadu -> bez tego lastEventConfig=null i
+    // overlay sie pomija. Po downloadzie zaktualizujemy do lokalnych plikow.
     String? overlayLocal = cfg.overlayPath;
     String? musicLocal = cfg.musicPath;
-
-    // Jesli Station podala lokalna sciezke ale plik nie istnieje (= Station
-    // na innym urzadzeniu), ignorujemy ja - preferujemy pobieranie z URL.
     if (overlayLocal != null && !File(overlayLocal).existsSync()) {
       overlayLocal = null;
     }
@@ -357,26 +377,84 @@ class StationClient extends ChangeNotifier {
       musicLocal = null;
     }
 
+    // Sprawdz czy mamy juz cache z poprzedniego downloadu (urlHash ->
+    // ten sam plik). Jesli tak - uzyj od razu, bez await.
     if (overlayLocal == null && cfg.overlayUrl != null &&
         cfg.overlayUrl!.isNotEmpty) {
-      overlayLocal = await _downloadEventAsset(cfg.overlayUrl!, 'overlay');
+      final cached = _cachedAssetPath(cfg.overlayUrl!, 'overlay');
+      if (cached != null) overlayLocal = cached;
     }
     if (musicLocal == null && cfg.musicUrl != null &&
         cfg.musicUrl!.isNotEmpty) {
-      musicLocal = await _downloadEventAsset(cfg.musicUrl!, 'music');
+      final cached = _cachedAssetPath(cfg.musicUrl!, 'music');
+      if (cached != null) musicLocal = cached;
     }
 
-    final finalCfg = cfg.copyWith(
+    // Set lastEventConfig z tym co mamy (sciezki moga byc jeszcze null dla
+    // pierwszego event_config po instalacji).
+    var finalCfg = cfg.copyWith(
       overlayPath: overlayLocal,
       musicPath: musicLocal,
     );
     _lastEventConfig = finalCfg;
-    debugPrint('[StationClient] Event config: ${finalCfg.eventName} '
-        'overlay=${finalCfg.overlayPath != null} '
-        'music=${finalCfg.musicPath != null}');
     _applyRecordingParams(finalCfg);
     onEventConfig?.call(finalCfg);
+    debugPrint('[StationClient] Event config (eager): ${finalCfg.eventName} '
+        'overlay=${finalCfg.overlayPath != null} '
+        'music=${finalCfg.musicPath != null}');
+
+    // Download brakujacych assetow w tle.
+    bool updated = false;
+    if (overlayLocal == null && cfg.overlayUrl != null &&
+        cfg.overlayUrl!.isNotEmpty) {
+      final path = await _downloadEventAsset(cfg.overlayUrl!, 'overlay');
+      if (path != null) {
+        overlayLocal = path;
+        updated = true;
+      }
+    }
+    if (musicLocal == null && cfg.musicUrl != null &&
+        cfg.musicUrl!.isNotEmpty) {
+      final path = await _downloadEventAsset(cfg.musicUrl!, 'music');
+      if (path != null) {
+        musicLocal = path;
+        updated = true;
+      }
+    }
+
+    if (updated) {
+      finalCfg = cfg.copyWith(
+        overlayPath: overlayLocal,
+        musicPath: musicLocal,
+      );
+      _lastEventConfig = finalCfg;
+      onEventConfig?.call(finalCfg);
+      debugPrint('[StationClient] Event config (downloaded): '
+          'overlay=${finalCfg.overlayPath != null} '
+          'music=${finalCfg.musicPath != null}');
+    }
   }
+
+  /// Sprawdza czy asset dla danego URL jest juz w cache lokalnym.
+  /// Zwraca sciezke jesli tak, null gdy brak. Synchroniczne zeby uniknac
+  /// await przy pierwszym set lastEventConfig.
+  String? _cachedAssetPath(String url, String label) {
+    try {
+      // path_provider getApplicationDocumentsDirectory jest async - wiec
+      // robimy check sync tylko gdy znamy sciezke. Zapamietamy w _docsDir
+      // przy pierwszym download.
+      if (_docsDir == null) return null;
+      final key = url.hashCode.toUnsigned(32).toRadixString(36);
+      final target = File(p.join(_docsDir!, 'event_assets',
+          'asset_${label}_$key.bin'));
+      if (target.existsSync() && target.lengthSync() > 0) {
+        return target.path;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  String? _docsDir;
 
   /// Pobiera URL backendu do docs/event_assets/<hash>.bin. Cache keyed by
   /// URL - ten sam URL = ten sam plik (skip re-download). Plik zachowany
@@ -384,6 +462,7 @@ class StationClient extends ChangeNotifier {
   Future<String?> _downloadEventAsset(String url, String label) async {
     try {
       final dir = await getApplicationDocumentsDirectory();
+      _docsDir = dir.path; // cache dla sync _cachedAssetPath
       final cacheDir = Directory(p.join(dir.path, 'event_assets'));
       if (!await cacheDir.exists()) {
         await cacheDir.create(recursive: true);

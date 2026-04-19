@@ -10,14 +10,18 @@ class SettingsStore extends ChangeNotifier {
   static const _kSlowMoFactor = 'rec.slowmo_factor';
   static const _kRotationDir = 'rec.rotation_dir'; // 'cw' | 'ccw' | 'mixed'
   static const _kRotationSpeed = 'rec.rotation_speed'; // 1..10
+  static const _kResolution = 'rec.resolution'; // 'fullHd' | 'uhd4k'
   static const _kFbDefaultOn = 'ui.fb_default_on';
   static const _kFallbackMusic = 'rec.fallback_music'; // label
 
   // Defaults (zgodne z WORKFLOW.md - 8s, 2x, mixed, 7/10)
-  int _videoDurationSec = 8;
+  // Resolution fullHd = bezpieczny default (FFmpeg szybki, 8s plik ~40MB).
+  // 4K dla premium eventow - FFmpeg 10-15s, plik ~150MB.
+  int _videoDurationSec = 16;
   double _slowMoFactor = 2.0;
   String _rotationDir = 'mixed';
   int _rotationSpeed = 7;
+  String _resolution = 'fullHd';
   bool _fbDefaultOn = false;
   String _fallbackMusic = 'Energetic Party';
 
@@ -28,15 +32,17 @@ class SettingsStore extends ChangeNotifier {
   double get slowMoFactor => _slowMoFactor;
   String get rotationDir => _rotationDir;
   int get rotationSpeed => _rotationSpeed;
+  String get resolution => _resolution;
   bool get fbDefaultOn => _fbDefaultOn;
   String get fallbackMusic => _fallbackMusic;
 
   Future<void> load() async {
     final p = await SharedPreferences.getInstance();
-    _videoDurationSec = p.getInt(_kVideoDuration) ?? 8;
+    _videoDurationSec = p.getInt(_kVideoDuration) ?? 16;
     _slowMoFactor = p.getDouble(_kSlowMoFactor) ?? 2.0;
     _rotationDir = p.getString(_kRotationDir) ?? 'mixed';
     _rotationSpeed = p.getInt(_kRotationSpeed) ?? 7;
+    _resolution = p.getString(_kResolution) ?? 'fullHd';
     _fbDefaultOn = p.getBool(_kFbDefaultOn) ?? false;
     _fallbackMusic = p.getString(_kFallbackMusic) ?? 'Energetic Party';
     _loaded = true;
@@ -44,7 +50,7 @@ class SettingsStore extends ChangeNotifier {
   }
 
   Future<void> setVideoDuration(int seconds) async {
-    _videoDurationSec = seconds.clamp(3, 15);
+    _videoDurationSec = seconds.clamp(3, 30);
     final p = await SharedPreferences.getInstance();
     await p.setInt(_kVideoDuration, _videoDurationSec);
     notifyListeners();
@@ -71,6 +77,15 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setResolution(String r) async {
+    // Tylko fullHd / uhd4k - 'max' (8K) usuniete bo FFmpeg za dlugo.
+    if (r != 'fullHd' && r != 'uhd4k') r = 'fullHd';
+    _resolution = r;
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kResolution, r);
+    notifyListeners();
+  }
+
   Future<void> setFbDefault(bool on) async {
     _fbDefaultOn = on;
     final p = await SharedPreferences.getInstance();
@@ -91,6 +106,7 @@ class SettingsStore extends ChangeNotifier {
       'slowmo_factor': _slowMoFactor,
       'rotation_dir': _rotationDir,
       'rotation_speed': _rotationSpeed,
+      'resolution': _resolution,
     };
   }
 }
