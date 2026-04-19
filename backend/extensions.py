@@ -25,6 +25,10 @@ def _rate_limit_key() -> str:
 # Default: 200/hour per IP dla calej app. Per-route nadpisuje dekoratorem.
 limiter = Limiter(
     key_func=_rate_limit_key,
-    default_limits=["200 per hour"],
+    # Domyslny limit dobiera wysoko - chronimy przed flood'em botow ale pozwalamy
+    # na polling UI (bulk analyze sprawdza status co 2s przez kilkadziesiat
+    # utworow = setki req/min w realnej pracy adminskiej). Endpointy publiczne
+    # (early-access signup) maja wlasny scislejszy decorator.
+    default_limits=["2000 per minute", "30000 per hour"],
     headers_enabled=True,  # dodaje X-RateLimit-* do responses - debug friendly
 )
