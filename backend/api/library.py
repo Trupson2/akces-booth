@@ -100,28 +100,54 @@ def _resolve_music_path(track: dict) -> Path:
 
 
 def _run_analysis(music_id: int, abs_path: str) -> None:
-    """Worker thread - analizuje i zapisuje do DB. Log tylko (bez UI)."""
-    # Import inline - librosa jest heavy, nie chcemy go ladowac na starcie
-    # aplikacji jesli admin nigdy analizy nie wywola.
+    """Subprocess worker - izoluje librosa/numba SIGSEGV od gunicorn workera.
+    Poprzednia implementacja (daemon Thread w workerze) powodowala ze crash
+    natywny librosa zabijal workera przez SIGSEGV (pid:XXX was sent SIGSEGV).
+    Subprocess = izolacja: subprocess moze padac, worker zyje.
+    """
+    import json as _json
+    import subprocess
     try:
-        scripts_dir = Config.BASE_DIR / "scripts"
-        if str(scripts_dir) not in sys.path:
-            sys.path.insert(0, str(scripts_dir))
-        import analyze_viral_moment  # type: ignore
-        result = analyze_viral_moment.analyze_file(abs_path)
+        script = Config.BASE_DIR / "scripts" / "analyze_viral_moment.py"
+        cmd = [sys.executable, str(script), abs_path, "--json"]
+        p = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=240,
+        )
+        if p.returncode != 0:
+            err = (p.stderr or "")[:500] or f"rc={p.returncode}"
+            log.error("viral analysis subprocess fail music_id=%d: %s",
+                      music_id, err)
+            models.set_music_analysis_status(
+                Config.DB_PATH, music_id, "failed", error=err,
+            )
+            return
+        try:
+            result = _json.loads(p.stdout.strip().splitlines()[-1])
+        except (ValueError, IndexError) as e:
+            log.error("viral analysis bad output music_id=%d: %s", music_id, e)
+            models.set_music_analysis_status(
+                Config.DB_PATH, music_id, "failed",
+                error=f"bad output: {p.stdout[:200]}",
+            )
+            return
         models.set_music_viral_offset(
-            Config.DB_PATH, music_id, result["offset_sec"]
+            Config.DB_PATH, music_id, float(result["offset_sec"]),
         )
         log.info(
             "viral analysis music_id=%d: offset=%.2fs "
             "confidence=%.2f tempo=%.0f",
             music_id, result["offset_sec"],
-            result["confidence"], result["tempo_bpm"],
+            result.get("confidence", 0.0), result.get("tempo_bpm", 0.0),
+        )
+    except subprocess.TimeoutExpired:
+        log.error("viral analysis timeout music_id=%d", music_id)
+        models.set_music_analysis_status(
+            Config.DB_PATH, music_id, "failed", error="timeout 240s",
         )
     except Exception as e:  # noqa: BLE001
-        log.exception("viral analysis failed music_id=%d", music_id)
+        log.exception("viral analysis unexpected music_id=%d", music_id)
         models.set_music_analysis_status(
-            Config.DB_PATH, music_id, "failed", error=str(e)[:500]
+            Config.DB_PATH, music_id, "failed", error=str(e)[:500],
         )
 
 
