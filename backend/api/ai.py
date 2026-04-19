@@ -158,12 +158,12 @@ def make_frame_transparent(
     *,
     out_width: int = 1080,
     out_height: int = 1920,
-    center_width_frac: float = 0.60,
-    center_height_frac: float = 0.55,
-    feather_px: int = 20,
-    white_key: bool = True,
-    white_brightness: int = 245,
-    white_saturation: float = 0.05,
+    center_width_frac: float = 0.50,
+    center_height_frac: float = 0.50,
+    feather_px: int = 16,
+    white_key: bool = False,
+    white_brightness: int = 252,
+    white_saturation: float = 0.03,
 ) -> bytes:
     """Post-process ramki: resize do portrait output + transparentne centrum +
     opcjonalny color-key bieli (Gemini zwraca RGB z bialym tlem wokol
