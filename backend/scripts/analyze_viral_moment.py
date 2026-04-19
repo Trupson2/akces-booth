@@ -82,19 +82,10 @@ def _ffmpeg_binary() -> str | None:
 
 
 def _load_audio(path: Path, target_sr: int) -> tuple[np.ndarray, int]:
-    """Laduje audio robustnie. Najpierw librosa (soundfile), fallback na
-    subprocess ffmpeg -> wav -> librosa. Librosa 0.10+ odmowila audioread
-    w niektorych buildach, wiec dla webm/m4a musi pojsc przez ffmpeg.
+    """Laduje audio robustnie. Zawsze via ffmpeg subprocess -> wav -> soundfile.
+    Nie uzywamy librosa.load bo jego audioread fallback powoduje SIGSEGV
+    na Pi (libsndfile nie wspiera mp3/m4a, audioread natywnie crashuje).
     """
-    # 1) Probujemy wprost - dla mp3/wav/flac/ogg soundfile powinien dac rade.
-    try:
-        y, sr = librosa.load(str(path), sr=target_sr, mono=True)
-        if y.size > 0:
-            return y, sr
-    except Exception:
-        pass
-
-    # 2) Pre-decode via ffmpeg do wav.
     ff = _ffmpeg_binary()
     if ff is None:
         raise RuntimeError(
@@ -110,7 +101,15 @@ def _load_audio(path: Path, target_sr: int) -> tuple[np.ndarray, int]:
             "-f", "wav", tmp_path,
         ]
         subprocess.run(cmd, check=True, capture_output=True, timeout=60)
-        y, sr = librosa.load(tmp_path, sr=target_sr, mono=True)
+        # soundfile czyta wav natywnie (libsndfile - zero subprocess, bez audioread).
+        import soundfile as sf  # noqa: WPS433 (inline - only when needed)
+        y, sr = sf.read(tmp_path, dtype="float32", always_2d=False)
+        if y.ndim > 1:
+            y = y.mean(axis=1)
+        if sr != target_sr:
+            # resample if ffmpeg didnt match (rare - bit zero-pad edge).
+            y = librosa.resample(y, orig_sr=sr, target_sr=target_sr)
+            sr = target_sr
         return y, sr
     finally:
         try:
