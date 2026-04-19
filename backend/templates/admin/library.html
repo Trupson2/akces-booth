@@ -91,7 +91,17 @@
         </label>
       </div>
     </div>
-    <div id="bulk-progress" class="hidden mb-2 text-xs text-slate-300"></div>
+    <div id="bulk-progress" class="hidden mb-3 bg-slate-900 rounded-lg p-3 border border-slate-700">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-sm font-semibold text-white" data-bulk-title>Analizuję...</div>
+        <div class="text-xs text-slate-400" data-bulk-stats></div>
+      </div>
+      <div class="h-2 bg-slate-800 rounded-full overflow-hidden">
+        <div class="h-full bg-gradient-to-r from-purple-600 to-indigo-500 transition-all duration-300"
+             style="width: 0%" data-bulk-bar></div>
+      </div>
+      <div class="mt-2 text-xs text-slate-400" data-bulk-current></div>
+    </div>
     <ul class="divide-y divide-slate-700">
       {% for m in music %}
         {% set _off_mode = m.offset_mode or 'default_30s' %}
@@ -234,41 +244,83 @@
 
 
   // Bulk operacje na muzyce - analizuj wszystkie / ustaw tryb wszystkim.
+  function _bulkUpdate({ title, stats, current, percent }) {
+    const box = document.getElementById('bulk-progress');
+    if (!box) return;
+    box.classList.remove('hidden');
+    if (title !== undefined) box.querySelector('[data-bulk-title]').textContent = title;
+    if (stats !== undefined) box.querySelector('[data-bulk-stats]').innerHTML = stats;
+    if (current !== undefined) box.querySelector('[data-bulk-current]').textContent = current;
+    if (percent !== undefined) {
+      box.querySelector('[data-bulk-bar]').style.width = Math.max(0, Math.min(100, percent)) + '%';
+    }
+  }
+  function _bulkHide(delayMs) {
+    setTimeout(() => document.getElementById('bulk-progress')?.classList.add('hidden'), delayMs);
+  }
+
   async function analyzeAllMissing() {
     const items = [...document.querySelectorAll('[data-music-id]')].map(el => ({
       id: parseInt(el.dataset.musicId, 10),
       statusEl: el.querySelector('[data-status]'),
+      name: el.querySelector('.flex-1 .font-semibold')?.textContent?.trim() || `utwór #${el.dataset.musicId}`,
     })).filter(it => !Number.isNaN(it.id));
-    // Sprawdzamy aktualne statusy z serwera (karta moze byc przestarzala).
-    const bar = document.getElementById('bulk-progress');
-    bar.classList.remove('hidden');
-    bar.textContent = `Start: pobieram statusy ${items.length} utworów...`;
+
+    _bulkUpdate({
+      title: 'Sprawdzam statusy...',
+      stats: `0 / ${items.length}`,
+      current: '',
+      percent: 0,
+    });
+
     const needed = [];
-    for (const it of items) {
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
       const r = await fetch(`/api/library/music/${it.id}`);
+      _bulkUpdate({ percent: (i / items.length) * 5 });
       if (!r.ok) continue;
       const d = await r.json();
       if (d.analysis_status !== 'success' || d.viral_offset_sec == null) {
         needed.push(it);
       }
     }
+
     if (needed.length === 0) {
-      bar.textContent = `✓ Wszystkie ${items.length} utworów juz przeanalizowane`;
-      setTimeout(() => bar.classList.add('hidden'), 3000);
+      _bulkUpdate({
+        title: '✓ Wszystkie utwory juz przeanalizowane',
+        stats: `${items.length} / ${items.length}`,
+        current: '',
+        percent: 100,
+      });
+      _bulkHide(3000);
       return;
     }
-    bar.textContent = `Do analizy: ${needed.length} z ${items.length}. Leci...`;
+
     let done = 0;
     let failed = 0;
-    // Serial - nie blokujmy Pi librosa JIT na raz.
-    for (const it of needed) {
+    const total = needed.length;
+
+    for (let i = 0; i < needed.length; i++) {
+      const it = needed[i];
+
+      _bulkUpdate({
+        title: `Analizuję ${i + 1} z ${total}`,
+        stats: `<span class="text-emerald-400">✓ ${done}</span> · ` +
+               `<span class="text-red-400">✗ ${failed}</span> · ` +
+               `<span class="text-slate-400">⌛ ${total - done - failed}</span>`,
+        current: `🎵 ${it.name}`,
+        percent: (i / total) * 100,
+      });
+
       if (it.statusEl) {
-        it.statusEl.textContent = '⟳ analiza...';
+        it.statusEl.innerHTML = '<span class="spin-icon">⟳</span> analiza...';
         it.statusEl.className = 'text-amber-300';
       }
+
       const r = await fetch(`/api/library/music/${it.id}/analyze`, { method: 'POST' });
       if (!r.ok) { failed++; continue; }
-      // Poll az skonczy (max 5 min per track - Pi numba JIT cold + 4 workery).
+
+      // Poll max 5 min per track (Pi numba JIT cold + 4 workery).
       let ok = false;
       for (let attempt = 0; attempt < 150; attempt++) {
         await new Promise(r => setTimeout(r, 2000));
@@ -282,6 +334,11 @@
             it.statusEl.className = '';
           }
           _highlightMode(it.id, sd.offset_mode);
+          const audio = document.querySelector(`[data-music-audio="${it.id}"]`);
+          if (audio && sd.effective_offset_sec != null) {
+            audio.dataset.offsetSec = sd.effective_offset_sec.toFixed(2);
+            _seekedOnce.delete(audio);
+          }
           ok = true;
           break;
         }
@@ -294,10 +351,23 @@
         }
       }
       if (ok) done++; else failed++;
-      bar.textContent = `Postęp: ${done}/${needed.length} ok, ${failed} fail`;
+
+      _bulkUpdate({
+        stats: `<span class="text-emerald-400">✓ ${done}</span> · ` +
+               `<span class="text-red-400">✗ ${failed}</span> · ` +
+               `<span class="text-slate-400">⌛ ${total - done - failed}</span>`,
+        percent: ((done + failed) / total) * 100,
+      });
     }
-    bar.textContent = `✓ Gotowe: ${done} analizowanych, ${failed} fail`;
-    setTimeout(() => bar.classList.add('hidden'), 5000);
+
+    _bulkUpdate({
+      title: '✓ Zakończono analizę',
+      stats: `<span class="text-emerald-400">✓ ${done} ok</span> · ` +
+             `<span class="text-red-400">✗ ${failed} fail</span>`,
+      current: '',
+      percent: 100,
+    });
+    _bulkHide(7000);
   }
 
   async function setAllMode(mode) {
