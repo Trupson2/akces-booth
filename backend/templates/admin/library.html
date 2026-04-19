@@ -268,9 +268,9 @@
       }
       const r = await fetch(`/api/library/music/${it.id}/analyze`, { method: 'POST' });
       if (!r.ok) { failed++; continue; }
-      // Poll az skonczy (max 90s per track - Pi numba JIT cold + hot).
+      // Poll az skonczy (max 5 min per track - Pi numba JIT cold + 4 workery).
       let ok = false;
-      for (let attempt = 0; attempt < 45; attempt++) {
+      for (let attempt = 0; attempt < 150; attempt++) {
         await new Promise(r => setTimeout(r, 2000));
         const s = await fetch(`/api/library/music/${it.id}`);
         if (!s.ok) continue;
@@ -419,10 +419,12 @@
   }
 
   function _pollAnalysis(id, attempt = 0) {
-    if (attempt > 30) {
+    // 150 × 2s = 5 min cap. librosa na Pi cold start z numba JIT = 15-20s,
+    // ciepla sesja 1-2s. Plus 4 workery gunicorn = rotujace JIT.
+    if (attempt > 150) {
       const s = document.querySelector(`[data-status="${id}"]`);
       if (s) {
-        s.textContent = '✗ timeout (>60s)';
+        s.textContent = '✗ timeout (>5min)';
         s.className = 'text-red-400';
       }
       const btn = document.querySelector(`[data-analyze-btn="${id}"]`);
