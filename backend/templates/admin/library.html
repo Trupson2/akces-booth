@@ -94,11 +94,21 @@
     <div id="bulk-progress" class="hidden mb-2 text-xs text-slate-300"></div>
     <ul class="divide-y divide-slate-700">
       {% for m in music %}
+        {% set _off_mode = m.offset_mode or 'default_30s' %}
+        {% set _eff_off = (
+            m.viral_offset_sec if _off_mode == 'ai' and m.viral_offset_sec is not none
+            else m.custom_offset_sec if _off_mode == 'custom' and m.custom_offset_sec is not none
+            else 30.0
+        ) %}
         <li class="py-3" data-music-id="{{ m.id }}">
           <div class="flex items-center gap-3">
             <audio controls preload="none"
                    src="/storage/{{ m.file_path.split('storage/')[-1] if 'storage/' in m.file_path else m.file_path }}"
-                   class="h-8"></audio>
+                   data-offset-sec="{{ '%.2f'|format(_eff_off) }}"
+                   data-music-audio="{{ m.id }}"
+                   onplay="seekToOffset(this)"
+                   class="h-8"
+                   title="Odtworzy od {{ '%.1f'|format(_eff_off) }}s (tryb: {{ _off_mode }})"></audio>
             <div class="flex-1 text-sm">
               <div class="font-semibold">{{ m.name }}</div>
               <div class="text-xs text-slate-400">{{ m.source }}</div>
@@ -190,6 +200,38 @@
     const r = await fetch('/api/library/music/' + id, { method: 'DELETE' });
     if (r.ok) location.reload();
   }
+
+  // Audio play -> seek do viral offset (zeby admin uslyszal co AI wybralo).
+  // Tracker _played trzyma audio-elementy ktore juz raz zeseekowaly w tej
+  // sesji odtwarzania - dzieki temu user moze pauzowac i wznowic bez reset.
+  const _seekedOnce = new WeakSet();
+  function seekToOffset(audioEl) {
+    if (_seekedOnce.has(audioEl)) return;
+    const off = parseFloat(audioEl.dataset.offsetSec || '0');
+    if (off > 0 && isFinite(off)) {
+      // Jesli audio jeszcze nie zaladowane, poczekaj na metadata.
+      const doSeek = () => {
+        try { audioEl.currentTime = off; } catch (_) {}
+      };
+      if (audioEl.readyState >= 1) {
+        doSeek();
+      } else {
+        audioEl.addEventListener('loadedmetadata', doSeek, { once: true });
+      }
+    }
+    _seekedOnce.add(audioEl);
+  }
+  // Reset seek tracker gdy audio zakonczy sie albo user reset zrobi od 0.
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('audio[data-music-audio]').forEach(a => {
+      a.addEventListener('ended', () => _seekedOnce.delete(a));
+      // Drag scrubber < 0.5s = user chce od poczatku, zresetuj.
+      a.addEventListener('seeked', () => {
+        if (a.currentTime < 0.5) _seekedOnce.delete(a);
+      });
+    });
+  });
+
 
   // Bulk operacje na muzyce - analizuj wszystkie / ustaw tryb wszystkim.
   async function analyzeAllMissing() {
@@ -339,6 +381,17 @@
     });
     if (!r.ok) { alert('Blad zmiany trybu'); return; }
     _highlightMode(id, mode);
+    // Update audio player offset zeby klik play skakal do nowej pozycji.
+    try {
+      const data = await r.json();
+      const off = data.effective_offset_sec;
+      const audio = document.querySelector(`[data-music-audio="${id}"]`);
+      if (audio && off != null && isFinite(off)) {
+        audio.dataset.offsetSec = off.toFixed(2);
+        audio.title = `Odtworzy od ${off.toFixed(1)}s (tryb: ${data.offset_mode})`;
+        _seekedOnce.delete(audio);
+      }
+    } catch (_) {}
   }
 
   async function applyCustom(id) {
@@ -390,6 +443,13 @@
         }
         if (btn) btn.disabled = false;
         _highlightMode(id, data.offset_mode);
+        // Update audio offset dla play-from-viral-moment.
+        const audio = document.querySelector(`[data-music-audio="${id}"]`);
+        if (audio && data.effective_offset_sec != null) {
+          audio.dataset.offsetSec = data.effective_offset_sec.toFixed(2);
+          audio.title = `Odtworzy od ${data.effective_offset_sec.toFixed(1)}s (tryb: ${data.offset_mode})`;
+          _seekedOnce.delete(audio);
+        }
       } else if (data.analysis_status === 'failed') {
         if (status) {
           status.textContent = '✗ ' + (data.analysis_error || 'fail');
