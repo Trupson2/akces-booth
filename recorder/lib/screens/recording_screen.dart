@@ -445,20 +445,15 @@ class _RecordingScreenState extends State<RecordingScreen>
                 );
             return Center(
               child: AspectRatio(
+                // Oryginalny hack - portrait viewport dla landscape sensor
+                // streama. Nie-idealne (content moze byc squeezed) ale
+                // user potwierdzil ze w tym ukladzie preview "jest git".
+                // MP4 output niezalezny - FFmpeg transpose=1 robi portrait.
                 aspectRatio: 1 / sensorAspect,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // RotatedBox quarterTurns=3 (90 CCW) - dopasowane do
-                    // tego jak OP13 podaje landscape stream, zeby preview
-                    // wyszedl portrait. quarterTurns=1 dawal poziomy obraz
-                    // (rotacja w zla strone). ClipRect = no overflow.
-                    ClipRect(
-                      child: RotatedBox(
-                        quarterTurns: 3,
-                        child: CameraPreview(ctrl),
-                      ),
-                    ),
+                    CameraPreview(ctrl),
                     if (hasOverlay)
                       IgnorePointer(
                         child: Image.file(
