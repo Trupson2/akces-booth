@@ -413,6 +413,7 @@ class StationClient extends ChangeNotifier {
     _lastEventConfig = finalCfg;
     _applyRecordingParams(finalCfg);
     onEventConfig?.call(finalCfg);
+    notifyListeners();
     debugPrint('[StationClient] Event config (eager): ${finalCfg.eventName} '
         'overlay=${finalCfg.overlayPath != null} '
         'music=${finalCfg.musicPath != null}');
@@ -443,6 +444,7 @@ class StationClient extends ChangeNotifier {
       );
       _lastEventConfig = finalCfg;
       onEventConfig?.call(finalCfg);
+      notifyListeners();
       debugPrint('[StationClient] Event config (downloaded): '
           'overlay=${finalCfg.overlayPath != null} '
           'music=${finalCfg.musicPath != null}');
