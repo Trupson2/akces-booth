@@ -68,9 +68,10 @@ class _PreviewScreenState extends State<PreviewScreen> {
             Center(
               child: _ready
                   ? AspectRatio(
-                      aspectRatio: _controller.value.aspectRatio < 1
-                          ? _controller.value.aspectRatio
-                          : 1 / _controller.value.aspectRatio,
+                      // FFmpeg wypisuje MP4 z prawidlowym aspect (transpose+scale
+                      // juz w video_processor). Czytamy wymiary z pliku bez
+                      // forsowania portrait/landscape - controller wie jak jest.
+                      aspectRatio: _controller.value.aspectRatio,
                       child: VideoPlayer(_controller),
                     )
                   : const CircularProgressIndicator(color: AppTheme.primary),
