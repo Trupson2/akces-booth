@@ -55,6 +55,8 @@ def _build_imagen_prompt(*, event_type: str, style: str, theme: str,
     na video w Recorderze przez FFmpeg drawtext z text_top/text_bottom
     eventu - gwarantowana poprawna pisownia.
     """
+    # names/event_date CELOWO IGNORUJEMY w prompcie - Gemini jak je zobaczy
+    # to wepcha na obraz mimo "no text". Tekst dokleja Recorder FFmpeg drawtext.
     return (
         f"Transparent PNG 1080x1920 portrait photo booth overlay for {event_type}. "
         f"Style: {style}. Theme: {theme or 'elegant'}. "
@@ -84,9 +86,12 @@ def _refine_prompt_with_gemini(**kwargs: str) -> str:
                 "a photo booth video overlay frame.\n\n"
                 f"Event type: {kwargs['event_type']}\n"
                 f"Style: {kwargs['style']}\n"
-                f"Theme: {kwargs.get('theme') or '(none)'}\n"
-                f"Names/Brand: {kwargs['names']}\n"
-                f"Date: {kwargs['event_date']}\n\n"
+                f"Theme: {kwargs.get('theme') or '(none)'}\n\n"
+                # CELOWO nie przekazujemy names/event_date do Gemini - gdyby
+                # zobaczyl te dane, wepchnalby je na obraz mimo instrukcji
+                # "no text" (AI image modele reaguja na obecnosc danych w
+                # promcie). Tekst na video dokleja Recorder przez FFmpeg
+                # drawtext - pisownia gwarantowana poprawna.
                 "CRITICAL requirements:\n"
                 "- Transparent PNG 1080x1920 PORTRAIT orientation (taller than wide)\n"
                 "- Decorative border on all 4 edges, MEDIUM thickness - occupies "
