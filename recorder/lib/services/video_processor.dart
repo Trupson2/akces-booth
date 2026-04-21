@@ -477,14 +477,14 @@ class VideoProcessor extends ChangeNotifier {
       if (drawText.topTextFile != null) {
         final txtEsc = _escapeFfmpegPath(drawText.topTextFile!);
         drawtextFilters.add(
-          "drawtext=fontfile='$fontEsc':textfile='$txtEsc':"
+          'drawtext=fontfile=$fontEsc:textfile=$txtEsc:'
           'x=(w-text_w)/2:y=h*0.04:$style',
         );
       }
       if (drawText.bottomTextFile != null) {
         final txtEsc = _escapeFfmpegPath(drawText.bottomTextFile!);
         drawtextFilters.add(
-          "drawtext=fontfile='$fontEsc':textfile='$txtEsc':"
+          'drawtext=fontfile=$fontEsc:textfile=$txtEsc:'
           'x=(w-text_w)/2:y=h-text_h-h*0.04:$style',
         );
       }
