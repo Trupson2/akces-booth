@@ -21,13 +21,26 @@
     </div>
     <div>
       <label class="block text-sm text-slate-400 mb-1">Styl</label>
-      <select name="style" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
+      <select name="style_preset" id="style-preset" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2">
         <option value="classic">Klasyczny (biel + zlota)</option>
         <option value="boho">Boho (pastele)</option>
         <option value="rustic">Rustykalny (drewno, polne kwiaty)</option>
         <option value="modern">Nowoczesny (minimalistyczny)</option>
         <option value="glamour">Glamour (czarny + zloty)</option>
+        <option value="barbie">Barbie (roz + czerni + brokat)</option>
+        <option value="18th">18-stka (neon, konfetti, metalicznie)</option>
+        <option value="chrzest">Chrzest (biel + blekit, pastelowe)</option>
+        <option value="komunia">Komunia (biel + zlota, roze, eleganckie)</option>
+        <option value="wiktoriansk">Wiktorianski (ciemny fiolet + zloto)</option>
+        <option value="tropikalny">Tropikalny (palmy, hibiskus, koral)</option>
+        <option value="geometric">Geometryczny (czarny + miedziany, linie)</option>
+        <option value="artdeco">Art Deco (zloto, symetria, wachlarze)</option>
+        <option value="watercolor">Akwarela (miekkie kolory, plamy)</option>
+        <option value="custom">— Wlasny (wpisz nizej) —</option>
       </select>
+      <input name="style_custom" id="style-custom" type="text"
+             placeholder="np. cyberpunk neon pink, cottagecore whimsy, japonskie sakura"
+             class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 mt-2 hidden">
     </div>
     <div>
       <label class="block text-sm text-slate-400 mb-1">Motyw (opcjonalnie)</label>
@@ -71,9 +84,34 @@
   const promptBox = document.getElementById('prompt-used');
   const variants = document.getElementById('variants');
 
+  // Toggle custom style input gdy user wybierze "Wlasny"
+  const stylePreset = document.getElementById('style-preset');
+  const styleCustom = document.getElementById('style-custom');
+  stylePreset.addEventListener('change', () => {
+    if (stylePreset.value === 'custom') {
+      styleCustom.classList.remove('hidden');
+      styleCustom.focus();
+    } else {
+      styleCustom.classList.add('hidden');
+    }
+  });
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const payload = Object.fromEntries(new FormData(form).entries());
+    // Jesli user wybral "Wlasny" - backend dostaje style_custom zamiast preset.
+    if (payload.style_preset === 'custom') {
+      payload.style = (payload.style_custom || '').trim();
+      if (!payload.style) {
+        statusBox.className = 'mb-4 p-3 rounded bg-red-900/50 text-sm';
+        statusBox.textContent = 'Wpisz wlasny styl albo wybierz preset.';
+        return;
+      }
+    } else {
+      payload.style = payload.style_preset;
+    }
+    delete payload.style_preset;
+    delete payload.style_custom;
     statusBox.className = 'mb-4 p-3 rounded bg-slate-800 text-sm';
     statusBox.textContent = 'Generowanie... moze chwile zajac (Imagen 3 API).';
     variants.innerHTML = '';

@@ -60,13 +60,14 @@ def _build_imagen_prompt(*, event_type: str, style: str, theme: str,
     return (
         f"Transparent PNG 1080x1920 portrait photo booth overlay for {event_type}. "
         f"Style: {style}. Theme: {theme or 'elegant'}. "
-        f"Decorative border at the edges (top, bottom, corners, sides) with "
-        f"MEDIUM thickness 10-15%% of image width. Center 65%% x 70%% area "
-        f"completely empty so video appears there. "
+        f"Decorative border at the edges (top, bottom, corners, sides) - "
+        f"LIGHT to MEDIUM thickness, ornaments occupy only 6-9%% of image "
+        f"width on each side. Keep it airy and delicate, not heavy or chunky. "
+        f"Center area 70%% width x 75%% height COMPLETELY EMPTY (video there). "
         f"IMPORTANT: NO TEXT, NO WORDS, NO LETTERS, NO NAMES, NO DATES anywhere "
         f"on the image - pure decorative ornaments only (flowers, swirls, "
-        f"geometric patterns). Elegant, substantial ornaments - not too thin, "
-        f"not too chunky. No inner frame lines crossing center."
+        f"geometric patterns). Delicate, refined ornaments - thinner rather "
+        f"than thicker. No inner frame lines crossing center."
     )
 
 
@@ -94,10 +95,10 @@ def _refine_prompt_with_gemini(**kwargs: str) -> str:
                 # drawtext - pisownia gwarantowana poprawna.
                 "CRITICAL requirements:\n"
                 "- Transparent PNG 1080x1920 PORTRAIT orientation (taller than wide)\n"
-                "- Decorative border on all 4 edges, MEDIUM thickness - occupies "
-                "10-15%% of image width on each side (not thin threads, not chunky\n"
-                "  walls). Substantial but airy.\n"
-                "- Center area 65%% width x 70%% height must be COMPLETELY EMPTY\n"
+                "- Decorative border on all 4 edges, LIGHT to MEDIUM thickness -\n"
+                "  occupies only 6-9%% of image width on each side. Delicate,\n"
+                "  airy, refined ornaments. NOT heavy, NOT chunky, NOT thick walls.\n"
+                "- Center area 70%% width x 75%% height must be COMPLETELY EMPTY\n"
                 "  (video will appear there - do not put anything in the middle)\n"
                 "- Decorations: ornate corners + flowing side borders + top/bottom bands\n"
                 "- *** ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO NAMES, NO DATES ***\n"
@@ -170,7 +171,7 @@ def _generate_images(prompt: str, count: int = 3) -> list[bytes]:
 def _remove_bg_floodfill(
     img: "Image.Image",
     *,
-    threshold: int = 220,
+    threshold: int = 200,
     feather_px: int = 4,
 ) -> "Image.Image":
     """Usuwa jasne tlo connected z brzegami (flood-fill od 4 rogow).
@@ -193,10 +194,10 @@ def _remove_bg_floodfill(
     r, g, b, a = arr[..., 0], arr[..., 1], arr[..., 2], arr[..., 3]
     bright = (r >= threshold) & (g >= threshold) & (b >= threshold)
     labeled, _n = label(bright)
-    # Flood-fill od CALYCH krawedzi (nie tylko 4 rogow): kazdy piksel na
-    # obwodzie obrazu startuje flood-fill. Lapiemy tak tez izolowane biale
-    # paski na gorze/dole (text labels w AI ramkach), ktore NIE lacza sie
-    # z rogami bo rogi maja kwiaty (non-bright).
+    # Flood-fill od CALYCH krawedzi + pixeli juz transparentnych (cutout
+    # centrum zrobiony wczesniej w make_frame_transparent). Uzywamy obu
+    # zrodel seeds: edge daje tlo connected z brzegiem, alpha=0 daje tlo
+    # sasiadujace z cutoutem (biale paski tuz przy krawedzi wideo).
     edge_labels = np.concatenate([
         labeled[0, :],
         labeled[-1, :],
@@ -204,6 +205,11 @@ def _remove_bg_floodfill(
         labeled[:, -1],
     ])
     bg_labels: set[int] = {int(x) for x in np.unique(edge_labels) if x > 0}
+    # Seed z juz-transparentnych pixeli (cutout): dowolny bright label
+    # stykajacy sie z alpha=0 = tlo.
+    transparent_mask = (a == 0)
+    transparent_labels = np.unique(labeled[transparent_mask])
+    bg_labels.update(int(x) for x in transparent_labels if x > 0)
     if not bg_labels:
         return img
     bg_mask = np.isin(labeled, list(bg_labels))
