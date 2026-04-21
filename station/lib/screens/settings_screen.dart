@@ -488,6 +488,16 @@ class _RecordingParamsSection extends StatelessWidget {
           ],
           onChanged: (v) => settings.setResolution(v),
         ),
+        _DropdownRow<double>(
+          label: 'Zoom',
+          value: settings.zoomLevel,
+          items: const [
+            (0.6, '0.6x (ultrawide, wiecej kadru)'),
+            (1.0, '1.0x (normalny)'),
+            (2.0, '2.0x (tele, blizej)'),
+          ],
+          onChanged: (v) => settings.setZoomLevel(v),
+        ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,

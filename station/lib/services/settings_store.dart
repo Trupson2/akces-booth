@@ -12,6 +12,7 @@ class SettingsStore extends ChangeNotifier {
   static const _kRotationSpeed = 'rec.rotation_speed'; // 1..10
   static const _kResolution = 'rec.resolution'; // 'fullHd' | 'uhd4k'
   static const _kStabilize = 'rec.stabilize';
+  static const _kZoomLevel = 'rec.zoom_level';
   static const _kFbDefaultOn = 'ui.fb_default_on';
   static const _kFallbackMusic = 'rec.fallback_music'; // label
 
@@ -24,6 +25,7 @@ class SettingsStore extends ChangeNotifier {
   int _rotationSpeed = 7;
   String _resolution = 'fullHd';
   bool _stabilize = false;
+  double _zoomLevel = 1.0;
   bool _fbDefaultOn = false;
   String _fallbackMusic = 'Energetic Party';
 
@@ -36,6 +38,7 @@ class SettingsStore extends ChangeNotifier {
   int get rotationSpeed => _rotationSpeed;
   String get resolution => _resolution;
   bool get stabilize => _stabilize;
+  double get zoomLevel => _zoomLevel;
   bool get fbDefaultOn => _fbDefaultOn;
   String get fallbackMusic => _fallbackMusic;
 
@@ -47,6 +50,7 @@ class SettingsStore extends ChangeNotifier {
     _rotationSpeed = p.getInt(_kRotationSpeed) ?? 7;
     _resolution = p.getString(_kResolution) ?? 'fullHd';
     _stabilize = p.getBool(_kStabilize) ?? false;
+    _zoomLevel = p.getDouble(_kZoomLevel) ?? 1.0;
     _fbDefaultOn = p.getBool(_kFbDefaultOn) ?? false;
     _fallbackMusic = p.getString(_kFallbackMusic) ?? 'Energetic Party';
     _loaded = true;
@@ -97,6 +101,13 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setZoomLevel(double z) async {
+    _zoomLevel = z;
+    final p = await SharedPreferences.getInstance();
+    await p.setDouble(_kZoomLevel, z);
+    notifyListeners();
+  }
+
   Future<void> setFbDefault(bool on) async {
     _fbDefaultOn = on;
     final p = await SharedPreferences.getInstance();
@@ -119,6 +130,7 @@ class SettingsStore extends ChangeNotifier {
       'rotation_speed': _rotationSpeed,
       'resolution': _resolution,
       'stabilize': _stabilize,
+      'zoom_level': _zoomLevel,
     };
   }
 }

@@ -32,6 +32,7 @@ class EventConfig {
     this.rotationDir,
     this.rotationSpeed,
     this.stabilize,
+    this.zoomLevel,
   });
 
   final int eventId;
@@ -65,6 +66,10 @@ class EventConfig {
   /// nadpisania (Recorder uzywa ostatniej wartosci w SettingsStore).
   final bool? stabilize;
 
+  /// Zoom aparatu (np 0.6=ultrawide, 1.0=main, 2.0=tele). Recorder clampuje
+  /// do zakresu wspieranego przez kamere. Null = brak nadpisania.
+  final double? zoomLevel;
+
   factory EventConfig.fromJson(Map<String, dynamic> j) => EventConfig(
         eventId: (j['event_id'] as num?)?.toInt() ?? 0,
         eventName: j['event_name']?.toString() ?? '',
@@ -82,6 +87,7 @@ class EventConfig {
         rotationDir: j['rotation_dir']?.toString(),
         rotationSpeed: (j['rotation_speed'] as num?)?.toInt(),
         stabilize: j['stabilize'] is bool ? j['stabilize'] as bool : null,
+        zoomLevel: (j['zoom_level'] as num?)?.toDouble(),
       );
 
   EventConfig copyWith({String? overlayPath, String? musicPath}) => EventConfig(
@@ -101,6 +107,7 @@ class EventConfig {
         rotationDir: rotationDir,
         rotationSpeed: rotationSpeed,
         stabilize: stabilize,
+        zoomLevel: zoomLevel,
       );
 }
 
@@ -522,8 +529,12 @@ class StationClient extends ChangeNotifier {
         await _store.saveStabilize(cfg.stabilize!);
         debugPrint('[StationClient] stabilize z Station -> ${cfg.stabilize}');
       }
+      if (cfg.zoomLevel != null) {
+        await _store.saveZoomLevel(cfg.zoomLevel!);
+        debugPrint('[StationClient] zoom_level z Station -> ${cfg.zoomLevel}');
+      }
       // TODO: saveVideoDuration / saveSlowmo / saveRotation jesli SettingsStore
-      // rozszerzymy. Na razie Recorder ma tylko resolution + mode + stabilize.
+      // rozszerzymy. Na razie Recorder ma resolution + mode + stabilize + zoom.
     } catch (e) {
       debugPrint('[StationClient] _applyRecordingParams error: $e');
     }

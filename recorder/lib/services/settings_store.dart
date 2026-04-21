@@ -11,6 +11,7 @@ class SettingsStore {
   static const _kStationPort = 'recorder.station.port';
   static const _kStabilize = 'recorder.stabilize';
   static const _kDemoMode = 'recorder.demo_mode';
+  static const _kZoomLevel = 'recorder.zoom_level';
 
   SharedPreferences? _prefs;
 
@@ -97,5 +98,18 @@ class SettingsStore {
   Future<void> saveDemoMode(bool on) async {
     final p = await _get();
     await p.setBool(_kDemoMode, on);
+  }
+
+  /// Zoom aparatu - np 0.6x (ultrawide), 1.0x (main), 2.0x (tele).
+  /// Finalny zoom clampujemy do min/max wspieranego przez kamere przy init
+  /// (OP13 ma zakres ~0.6-6.0x, niektore telefony tylko 1.0-10.0x).
+  Future<double> loadZoomLevel() async {
+    final p = await _get();
+    return p.getDouble(_kZoomLevel) ?? 1.0;
+  }
+
+  Future<void> saveZoomLevel(double z) async {
+    final p = await _get();
+    await p.setDouble(_kZoomLevel, z);
   }
 }

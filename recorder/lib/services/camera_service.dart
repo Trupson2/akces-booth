@@ -37,6 +37,7 @@ class CameraService extends ChangeNotifier {
   CameraInitStatus _status = CameraInitStatus.idle;
   RecordingMode _mode = RecordingMode.normal;
   RecordingResolution _resolution = RecordingResolution.fullHd;
+  double _zoomLevel = 1.0;
   bool _isRecording = false;
   bool _highFpsDegraded = false;
   bool _resolutionDegraded = false;
@@ -94,6 +95,7 @@ class CameraService extends ChangeNotifier {
       // Zaladuj ostatnio wybrane ustawienia przed stworzeniem controllera.
       _mode = await _store.loadMode();
       _resolution = await _store.loadResolution();
+      _zoomLevel = await _store.loadZoomLevel();
 
       _cameras = await availableCameras();
       if (_cameras.isEmpty) {
@@ -106,6 +108,7 @@ class CameraService extends ChangeNotifier {
       );
 
       await _createController(_mode, _resolution);
+      await _applyZoom(_zoomLevel);
       // Diagnostyka EIS - co tryb stabilizacji wspiera back camera
       // (native HAL). Logujemy przy starcie - przyda sie do decyzji
       // czy warto forkowac `camera_android_camerax` zeby wlaczyc
@@ -209,6 +212,7 @@ class CameraService extends ChangeNotifier {
     _set(CameraInitStatus.initializing);
     try {
       await _createController(mode, _resolution);
+      await _applyZoom(_zoomLevel);
       _set(CameraInitStatus.ready);
     } catch (e) {
       _set(CameraInitStatus.error, error: e.toString());
@@ -227,11 +231,40 @@ class CameraService extends ChangeNotifier {
     _set(CameraInitStatus.initializing);
     try {
       await _createController(_mode, resolution);
+      await _applyZoom(_zoomLevel);
       _set(CameraInitStatus.ready);
     } catch (e) {
       _set(CameraInitStatus.error, error: e.toString());
     }
   }
+
+  /// Zastosuj zoom na biezacym CameraController. Clampuje do min/max kamery.
+  /// Dla 0.6x na OP13 przelacza na ultrawide lens (wiecej kadru). Gdy kamera
+  /// nie wspiera danego zoom lvl -> uzywa najblizszej wartosci.
+  Future<void> _applyZoom(double requested) async {
+    final ctrl = _controller;
+    if (ctrl == null || !ctrl.value.isInitialized) return;
+    try {
+      final min = await ctrl.getMinZoomLevel();
+      final max = await ctrl.getMaxZoomLevel();
+      final clamped = requested.clamp(min, max);
+      await ctrl.setZoomLevel(clamped);
+      debugPrint('[CameraService] zoom: requested=$requested '
+          'range=[$min..$max] -> applied=$clamped');
+    } catch (e) {
+      debugPrint('[CameraService] zoom apply fail: $e');
+    }
+  }
+
+  /// Zmiana zoom - trwala (zapisuje w SettingsStore) i natychmiastowa
+  /// na biezacym kontrolerze (bez rekreacji sesji).
+  Future<void> setZoomLevel(double zoom) async {
+    _zoomLevel = zoom;
+    await _store.saveZoomLevel(zoom);
+    await _applyZoom(zoom);
+  }
+
+  double get zoomLevel => _zoomLevel;
 
   /// Otwiera ustawienia systemowe (gdy uprawnienia sa permanently denied).
   Future<bool> openSystemSettings() => openAppSettings();
