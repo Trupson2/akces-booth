@@ -226,6 +226,21 @@ def _remove_bg_floodfill(
     transparent_mask = (a == 0)
     transparent_labels = np.unique(labeled[transparent_mask])
     bg_labels.update(int(x) for x in transparent_labels if x > 0)
+
+    # Kill izolowanych jasnych komponentow: Gemini lubi dorzucac biale
+    # "galazki" / drobne dekoracje miedzy glownymi ornamentami mimo
+    # prompta "corners only". Nie lacza sie z brzegiem ani cutoutem
+    # wiec flood-fill ich nie lapie. Reguly:
+    # - component > 400 px i NIE w bg_labels jeszcze => likely stray decoration
+    # - component <= 400 px => zachowujemy (male iskierki / jewels w ornamentach)
+    if _n > 0:
+        sizes = np.bincount(labeled.ravel())
+        for lbl in range(1, _n + 1):
+            if lbl in bg_labels:
+                continue
+            if sizes[lbl] > 400:
+                bg_labels.add(lbl)
+
     if not bg_labels:
         return img
     bg_mask = np.isin(labeled, list(bg_labels))
