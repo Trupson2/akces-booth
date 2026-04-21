@@ -7,8 +7,11 @@ Pillow>=10.4.0
 gunicorn>=21.2.0
 google-genai>=1.0.0
 # AI viral moment analiza muzyki (backend/scripts/analyze_viral_moment.py).
-# librosa + numpy pociagaja scipy, audioread, soundfile. imageio-ffmpeg
-# to fallback dla webm/m4a gdy systemowy ffmpeg nie jest dostepny.
-librosa>=0.10.0,<1.0.0
+# Skrypt uzywa scipy.signal + numpy + soundfile. Wywalilismy librosa bo
+# numba JIT w librosa.feature.rms/onset_strength/beat_track daje SIGSEGV
+# na Pi (ARM + specyficzny build llvmlite). imageio-ffmpeg to fallback
+# dla webm/m4a gdy systemowy ffmpeg nie jest dostepny.
 numpy>=1.24.0
+scipy>=1.10.0
+soundfile>=0.12.0
 imageio-ffmpeg>=0.4.9

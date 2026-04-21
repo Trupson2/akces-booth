@@ -1,20 +1,23 @@
 """Analizator 'viral moment' - szuka najmocniejszego beat drop / chorus entry.
 
 Metodyka:
-1. Wczytujemy audio przez librosa (resample do 22050 Hz mono).
+1. Wczytujemy audio przez ffmpeg subprocess -> wav -> soundfile (22050 Hz mono).
 2. Liczymy 3 cechy na ramki (frame_length=2048, hop_length=512, ~23 ms/hop):
    - RMS energy: glosnosc
    - Spectral flux: zmiana widma (perc. ataki, instrumenty dochodzace)
-   - Onset strength: globalny oneset envelope
-3. Tempo + beat tracking - zeby snap do faktycznego downbeatu.
+   - Onset envelope: pochodna logarytmicznego spectrogramu
+3. Tempo + beat tracking (autokorelacja onset envelope) - snap do downbeatu.
 4. 'Viral score' na okno 3s = rolling mean (onset + flux + energy).
 5. Heurystyka: szukamy pozycji gdzie score rosnie maksymalnie po cichym regionie
-   (beat drop/chorus wejscie), w przedziale 15-75% dlugosci utworu
-   (na koncu juz za pozno, na starcu to zwykle intro).
-6. Snap do najblizszego beatu zeby ciecia nie wlapywaly sie w srodek fra.
-7. Clamp do [8s, duration-10s] zeby zostawic zapas na boomerang 8s.
+   (beat drop/chorus wejscie), w przedziale 15-75% dlugosci utworu.
+6. Snap do najblizszego beatu zeby ciecia nie wlapywaly sie w srodek frazy.
+7. Clamp do [8s, duration-10s].
 
 Zwraca float seconds. Cache per-track w DB (wolajacy zapisze).
+
+**Uwaga: celowo NIE uzywamy librosa** - librosa.feature.rms / onset_strength /
+beat_track polegaja na numba JIT ktore na Pi (ARM + specyficzny build
+llvmlite) daje SIGSEGV. Pure numpy + scipy.signal = stabilne na x86 i ARM.
 
 CLI (standalone):
     python analyze_viral_moment.py <plik_audio> [--json]
@@ -23,7 +26,7 @@ API (Flask):
     from scripts.analyze_viral_moment import analyze_file
     offset = analyze_file(path)
 
-Zaleznosci: librosa >= 0.10, numpy. Zamontowane w requirements.txt.
+Zaleznosci: numpy, scipy, soundfile (wszystkie transitive librosa deps).
 """
 from __future__ import annotations
 
@@ -38,20 +41,9 @@ from typing import Any
 
 import numpy as np
 
-try:
-    import librosa
-except ImportError as e:
-    print(f"ERROR: librosa nie zainstalowana: {e}", file=sys.stderr)
-    print("Zainstaluj: pip install librosa", file=sys.stderr)
-    sys.exit(2)
-
 
 def _ensure_ffmpeg_on_path() -> None:
-    """Doklada imageio-ffmpeg na PATH jesli nie ma systemowego ffmpeg.
-    librosa.load uzywa audioread ktore woola ffmpeg subprocessem dla .webm/.m4a
-    itp. Na Windows dev maszynie user moze nie miec ffmpeg w PATH.
-    """
-    # Quick check - fast path gdy ffmpeg juz jest.
+    """Doklada imageio-ffmpeg na PATH jesli nie ma systemowego ffmpeg."""
     for entry in os.environ.get("PATH", "").split(os.pathsep):
         if entry and (Path(entry) / "ffmpeg.exe").exists():
             return
@@ -83,8 +75,7 @@ def _ffmpeg_binary() -> str | None:
 
 def _load_audio(path: Path, target_sr: int) -> tuple[np.ndarray, int]:
     """Laduje audio robustnie. Zawsze via ffmpeg subprocess -> wav -> soundfile.
-    Nie uzywamy librosa.load bo jego audioread fallback powoduje SIGSEGV
-    na Pi (libsndfile nie wspiera mp3/m4a, audioread natywnie crashuje).
+    Nie uzywamy librosa.load bo audioread fallback daje SIGSEGV na Pi.
     """
     ff = _ffmpeg_binary()
     if ff is None:
@@ -101,14 +92,19 @@ def _load_audio(path: Path, target_sr: int) -> tuple[np.ndarray, int]:
             "-f", "wav", tmp_path,
         ]
         subprocess.run(cmd, check=True, capture_output=True, timeout=60)
-        # soundfile czyta wav natywnie (libsndfile - zero subprocess, bez audioread).
         import soundfile as sf  # noqa: WPS433 (inline - only when needed)
         y, sr = sf.read(tmp_path, dtype="float32", always_2d=False)
         if y.ndim > 1:
             y = y.mean(axis=1)
         if sr != target_sr:
-            # resample if ffmpeg didnt match (rare - bit zero-pad edge).
-            y = librosa.resample(y, orig_sr=sr, target_sr=target_sr)
+            # Fallback resample przez scipy jesli ffmpeg nie zachowal SR.
+            from scipy.signal import resample_poly  # noqa: WPS433
+            # resample_poly wymaga int up/down factors
+            from math import gcd
+            g = gcd(target_sr, sr)
+            up = target_sr // g
+            down = sr // g
+            y = resample_poly(y, up, down).astype(np.float32)
             sr = target_sr
         return y, sr
     finally:
@@ -135,6 +131,121 @@ _OUTPUT_MIN_SEC = 8.0
 _OUTPUT_TAIL_MARGIN = 10.0
 
 
+def _frame_signal(y: np.ndarray, frame_length: int, hop_length: int) -> np.ndarray:
+    """Zwraca macierz (n_frames, frame_length) - y pociete na ramki.
+    Pure numpy - bez librosa.util.frame (unika numba JIT).
+    """
+    if len(y) < frame_length:
+        # Dla bardzo krotkiego sygnalu padding zerami.
+        y = np.pad(y, (0, frame_length - len(y)))
+    n_frames = 1 + (len(y) - frame_length) // hop_length
+    if n_frames <= 0:
+        return np.zeros((0, frame_length), dtype=y.dtype)
+    # Strided view - O(1) memory. Korzystamy ze stride_tricks dla szybkosci.
+    bytes_per_sample = y.strides[0]
+    shape = (n_frames, frame_length)
+    strides = (hop_length * bytes_per_sample, bytes_per_sample)
+    frames = np.lib.stride_tricks.as_strided(y, shape=shape, strides=strides)
+    return frames
+
+
+def _rms_per_frame(y: np.ndarray, frame_length: int, hop_length: int) -> np.ndarray:
+    """RMS energy per frame - pure numpy, zastepuje librosa.feature.rms."""
+    frames = _frame_signal(y, frame_length, hop_length)
+    # RMS = sqrt(mean(x^2)) per row
+    return np.sqrt(np.mean(frames.astype(np.float64) ** 2, axis=1)).astype(np.float32)
+
+
+def _stft_magnitude(y: np.ndarray, n_fft: int, hop_length: int) -> np.ndarray:
+    """STFT magnitude (n_bins, n_frames). Uzywa scipy.signal jako stabilny
+    odpowiednik librosa.stft."""
+    from scipy.signal import stft as sp_stft  # noqa: WPS433
+    # Hanning window, noverlap = n_fft - hop_length
+    _, _, Z = sp_stft(
+        y,
+        fs=1.0,  # nie potrzebujemy real-time freqs tutaj
+        window="hann",
+        nperseg=n_fft,
+        noverlap=n_fft - hop_length,
+        nfft=n_fft,
+        return_onesided=True,
+        padded=True,
+        boundary="zeros",
+    )
+    return np.abs(Z).astype(np.float32)
+
+
+def _onset_envelope(mag: np.ndarray) -> np.ndarray:
+    """Onset strength envelope = sum po binach pozytywnej pochodnej log magnitude.
+    Standardowy 'spectral flux' onset detector - zastepuje librosa.onset.onset_strength.
+    """
+    # Log-magnitude compression (librosa uzywa np. log(1 + gamma*mag)).
+    log_mag = np.log1p(10.0 * mag)
+    # Pozytywna pochodna - tylko wzrost, bo onset = przyjscie nowego dzwieku.
+    diff = np.diff(log_mag, axis=1)
+    diff = np.maximum(diff, 0.0)
+    # Suma po biny = jeden float per ramke.
+    env = np.sum(diff, axis=0)
+    # Padding zeby zachowac dlugosc == n_frames magnitude.
+    env = np.concatenate([[0.0], env])
+    return env.astype(np.float32)
+
+
+def _estimate_tempo_and_beats(
+    onset_env: np.ndarray, sr: int, hop_length: int,
+) -> tuple[float, np.ndarray]:
+    """Estymacja tempo (BPM) przez autokorelacje onset envelope + beat times.
+    Zastepuje librosa.beat.beat_track - prosta wersja bez Dynamic Programming.
+    """
+    if len(onset_env) < 4:
+        return 0.0, np.array([], dtype=np.float32)
+
+    # Autokorelacja - znajdujemy periodicznosc.
+    frames_per_sec = sr / hop_length
+    # Szukamy BPM w zakresie 60-200 (praktyczne tempo muzyki tanecznej).
+    min_lag = max(1, int(frames_per_sec * 60.0 / 200.0))
+    max_lag = int(frames_per_sec * 60.0 / 60.0)
+    max_lag = min(max_lag, len(onset_env) - 1)
+    if max_lag <= min_lag:
+        return 0.0, np.array([], dtype=np.float32)
+
+    # Usun DC component - srednia z onset_env.
+    oe = onset_env - np.mean(onset_env)
+    # np.correlate(a, a, 'full') = autokorelacja, srodek = lag 0.
+    # Uzywamy scipy.signal.correlate ktore jest szybsze przez FFT.
+    try:
+        from scipy.signal import correlate  # noqa: WPS433
+        ac = correlate(oe, oe, mode="full", method="fft")
+    except Exception:
+        ac = np.correlate(oe, oe, mode="full")
+    ac = ac[len(ac) // 2:]  # tylko pozytywne lag
+
+    # Peak w przedziale [min_lag, max_lag] = dominujacy okres.
+    window = ac[min_lag:max_lag + 1]
+    if window.size == 0:
+        return 0.0, np.array([], dtype=np.float32)
+    peak_offset = int(np.argmax(window))
+    period_frames = min_lag + peak_offset
+    if period_frames <= 0:
+        return 0.0, np.array([], dtype=np.float32)
+
+    bpm = 60.0 * frames_per_sec / period_frames
+
+    # Beat times - rozmieszczamy beats co period_frames, zaczynajac od
+    # miejsca gdzie onset jest najsilniejszy w pierwszych 2 okresach.
+    first_search_end = min(len(onset_env), 2 * period_frames)
+    first_beat_frame = int(np.argmax(onset_env[:first_search_end]))
+
+    beat_frames = []
+    frame = first_beat_frame
+    while frame < len(onset_env):
+        beat_frames.append(frame)
+        frame += period_frames
+
+    beat_times = np.array(beat_frames, dtype=np.float32) * hop_length / sr
+    return float(bpm), beat_times
+
+
 def analyze_file(path: str | Path) -> dict[str, Any]:
     """Analizuje plik audio, zwraca dict z offsetem i diagnostyka.
 
@@ -153,13 +264,10 @@ def analyze_file(path: str | Path) -> dict[str, Any]:
     if not p.exists():
         raise FileNotFoundError(f"Audio not found: {p}")
 
-    # load: zwraca y (audio), sr. mono=True scala do 1-kanalu. Robustny loader -
-    # fallback na ffmpeg subprocess dla webm/m4a gdzie soundfile zawiedzie.
     y, sr = _load_audio(p, _SAMPLE_RATE)
-    duration = float(librosa.get_duration(y=y, sr=sr))
+    duration = float(len(y)) / float(sr)
 
     if duration < 20.0:
-        # Zbyt krotki utwor - zwracamy default, nie ma gdzie szukac.
         return {
             "offset_sec": max(_OUTPUT_MIN_SEC, duration * 0.3),
             "duration_sec": duration,
@@ -168,30 +276,27 @@ def analyze_file(path: str | Path) -> dict[str, Any]:
             "method": "too_short_default",
         }
 
-    # Cechy na ramki.
-    rms = librosa.feature.rms(
-        y=y, frame_length=_FRAME_LENGTH, hop_length=_HOP_LENGTH
-    )[0]
-    onset_env = librosa.onset.onset_strength(
-        y=y, sr=sr, hop_length=_HOP_LENGTH
-    )
-    # Spectral flux = roznica L2 miedzy kolejnymi widmami - charakteryzuje
-    # 'przyjscie' nowych instrumentow (wlasciwie co robi onset_strength,
-    # ale oba razem daja wyraznie lepsze wyniki przy niektorych gatunkach).
-    S = np.abs(librosa.stft(y, n_fft=_FRAME_LENGTH, hop_length=_HOP_LENGTH))
-    flux = np.sqrt(np.sum(np.diff(S, axis=1) ** 2, axis=0))
-    flux = np.maximum(flux, 0.0)
-    # Padding zeby dlugosc sie zgadzala.
+    # STFT magnitude - podstawa pod flux + onset envelope.
+    mag = _stft_magnitude(y, n_fft=_FRAME_LENGTH, hop_length=_HOP_LENGTH)
+    onset_env = _onset_envelope(mag)
+
+    # RMS per frame - glosnosc.
+    rms = _rms_per_frame(y, frame_length=_FRAME_LENGTH, hop_length=_HOP_LENGTH)
+
+    # Spectral flux = L2 norm z pozytywnej pochodnej magnitude.
+    # Podobne do onset_env ale bez log compression - lapie wylacznie "szeroki"
+    # atak (drop z basy + hi-hat), kiedy onset_env lapie tez detale.
+    diff_mag = np.diff(mag, axis=1)
+    diff_mag = np.maximum(diff_mag, 0.0)
+    flux = np.sqrt(np.sum(diff_mag ** 2, axis=0))
     flux = np.concatenate([[0.0], flux])
 
-    # Wyrownanie dlugosci (czasem roznia sie o 1 przez STFT padding).
+    # Wyrownanie dlugosci.
     min_len = min(len(rms), len(onset_env), len(flux))
     rms = rms[:min_len]
     onset_env = onset_env[:min_len]
     flux = flux[:min_len]
 
-    # Normalizacja kazdej cechy do [0,1] (z-score moglby byc lepszy ale
-    # czasem RMS ma outliers - min-max jest bardziej robustny).
     def _norm(x: np.ndarray) -> np.ndarray:
         lo, hi = float(np.percentile(x, 5)), float(np.percentile(x, 95))
         if hi - lo < 1e-9:
@@ -202,28 +307,18 @@ def analyze_file(path: str | Path) -> dict[str, Any]:
     onset_n = _norm(onset_env)
     flux_n = _norm(flux)
 
-    # Combined 'energy score'. Wagi: onset + flux lepsze przy detekcji drop'a,
-    # RMS zabezpiecza przed false positives w cichym podkladzie.
     energy = 0.45 * onset_n + 0.35 * flux_n + 0.20 * rms_n
 
-    # Rolling mean okno _SCORE_WINDOW_SEC.
     frames_per_sec = sr / _HOP_LENGTH
     win_frames = max(1, int(_SCORE_WINDOW_SEC * frames_per_sec))
-    # Prosty moving average przez convolve.
-    kernel = np.ones(win_frames) / win_frames
+    kernel = np.ones(win_frames, dtype=np.float32) / win_frames
     smooth = np.convolve(energy, kernel, mode="same")
 
-    # Beat tracking - uzywamy do snap offsetu do downbeatu.
-    tempo, beats = librosa.beat.beat_track(
-        onset_envelope=onset_env, sr=sr, hop_length=_HOP_LENGTH
-    )
-    tempo_bpm = float(tempo) if np.isscalar(tempo) else float(tempo[0])
-    beat_times = librosa.frames_to_time(
-        beats, sr=sr, hop_length=_HOP_LENGTH
+    # Beat tracking (local - bez librosa).
+    tempo_bpm, beat_times = _estimate_tempo_and_beats(
+        onset_env, sr=sr, hop_length=_HOP_LENGTH,
     )
 
-    # Szukamy 'skoku' - dla kazdej ramki liczymy roznice between smooth[i]
-    # a minimalnym smooth w oknie 4s przed. Gdzie roznica najwieksza - drop.
     lookback_frames = int(4.0 * frames_per_sec)
     best_rise = -1.0
     best_frame = -1
@@ -235,37 +330,25 @@ def analyze_file(path: str | Path) -> dict[str, Any]:
         lo_idx = max(0, i - lookback_frames)
         window_min = float(np.min(smooth[lo_idx:i + 1]))
         rise = float(smooth[i]) - window_min
-        # Bonus: wartosc absolutna energia musi byc dostatecznie wysoka
-        # (drop po prawdziwej cichej sekcji jest gwoldziem gatunku).
         abs_score = rise + 0.3 * float(smooth[i])
         if abs_score > best_rise:
             best_rise = abs_score
             best_frame = i
 
     if best_frame < 0:
-        # Fallback - zadnego piku nie znalezione, wroc 30% dlugosci.
         offset_sec = max(_OUTPUT_MIN_SEC, duration * 0.3)
         confidence = 0.0
     else:
-        offset_sec = librosa.frames_to_time(
-            best_frame, sr=sr, hop_length=_HOP_LENGTH
-        )
-        offset_sec = float(offset_sec)
-        # Snap do najblizszego downbeatu (co 4 beaty) jezeli dostepne.
+        offset_sec = float(best_frame) * _HOP_LENGTH / sr
         if len(beat_times) > 4:
-            # Prosty downbeat guess - co 4 beat.
             downbeats = beat_times[::4]
             if len(downbeats) > 0:
                 idx = int(np.argmin(np.abs(downbeats - offset_sec)))
                 snapped = float(downbeats[idx])
-                # Tylko snapujemy jesli blisko (< 1s), inaczej beat tracker
-                # moze przegapic downbeat i odciagnac nas daleko.
                 if abs(snapped - offset_sec) < 1.0:
                     offset_sec = snapped
-        # Confidence = znormalizowany rise w oknie 0..1.
         confidence = float(min(1.0, best_rise / 1.5))
 
-    # Clamp - minimum 8s (intro ma cos do pokazania), max tail margin.
     max_allowed = max(_OUTPUT_MIN_SEC, duration - _OUTPUT_TAIL_MARGIN)
     offset_sec = float(np.clip(offset_sec, _OUTPUT_MIN_SEC, max_allowed))
 
