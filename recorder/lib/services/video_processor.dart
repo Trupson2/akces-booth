@@ -432,18 +432,31 @@ class VideoProcessor extends ChangeNotifier {
     // zeby wyjsc portrait. User chce portrait output zawsze (fotobudka 360
     // ustawiona do nagrywania pionowego).
     final needsTranspose = videoDims.width > videoDims.height;
-    final transposeFilter = needsTranspose ? 'transpose=1,' : '';
-    final preV = config.stabilize
-        ? '[0:v]${transposeFilter}deshake=rx=24:ry=24:edge=mirror,'
-            'format=yuv420p,fps=30[v0]'
-        : '[0:v]${transposeFilter}format=yuv420p,fps=30[v0]';
-    parts.add(preV);
 
-    // Po transpose wymiary sie swapuja - dla overlay + drawtext uzywamy
-    // finalDims (post-rotation).
-    final finalDims = needsTranspose
-        ? _VideoDims(videoDims.height, videoDims.width)
-        : videoDims;
+    // Docelowe wymiary portrait - zawsze 1080x1920 bez wzgledu na input
+    // (fotobudka 360 nagrywa portrait, musimy to wymusic).
+    final targetW = needsTranspose ? videoDims.height : videoDims.width;
+    final targetH = needsTranspose ? videoDims.width : videoDims.height;
+    final finalDims = _VideoDims(targetW, targetH);
+
+    // Transpose jako OSOBNY filter step (chainowanie inline nie dzialalo
+    // w ffmpeg-kit buildzie - output wychodzil landscape). Po transpose
+    // jawny scale zeby wymusic dokladne target dims - fail-safe gdyby
+    // transpose byl cicho ignorowany.
+    if (needsTranspose) {
+      parts.add('[0:v]transpose=1[v_rot]');
+      final mid = config.stabilize
+          ? '[v_rot]deshake=rx=24:ry=24:edge=mirror,'
+              'scale=$targetW:$targetH,format=yuv420p,fps=30[v0]'
+          : '[v_rot]scale=$targetW:$targetH,format=yuv420p,fps=30[v0]';
+      parts.add(mid);
+    } else {
+      final preV = config.stabilize
+          ? '[0:v]deshake=rx=24:ry=24:edge=mirror,'
+              'scale=$targetW:$targetH,format=yuv420p,fps=30[v0]'
+          : '[0:v]scale=$targetW:$targetH,format=yuv420p,fps=30[v0]';
+      parts.add(preV);
+    }
 
     final actualSec = actualDuration.inMilliseconds / 1000.0;
     String currentLabel;
