@@ -27,6 +27,11 @@ class LocalServer extends ChangeNotifier {
 
   HttpServer? _server;
   WebSocketChannel? _recorderChannel;
+
+  /// Callback fire'uje sie za kazdym razem gdy Recorder (re)connects.
+  /// EventManager uzywa tego do natychmiastowego push event_config, zeby
+  /// po reconnect Recorder nie musial czekac do 30s na kolejny sync.
+  void Function()? onRecorderConnect;
   String? _localIp;
   String? _lastError;
 
@@ -153,6 +158,14 @@ class LocalServer extends ChangeNotifier {
     _recorderChannel?.sink.close();
     _recorderChannel = channel;
     notifyListeners();
+    // Natychmiast push event_config zeby po reconnect Recorder nie musial
+    // czekac 30s do kolejnego syncNow. Krytyczne gdy WS niestabilny (LTE
+    // hotspot) i zrywa sie czesto.
+    try {
+      onRecorderConnect?.call();
+    } catch (e) {
+      debugPrint('[LocalServer] onRecorderConnect cb error: $e');
+    }
 
     channel.stream.listen(
       _onMessage,

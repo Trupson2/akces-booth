@@ -49,6 +49,14 @@ class EventManager extends ChangeNotifier {
     await backend.loadConfig();
     await syncNow();
     _poll = Timer.periodic(syncInterval, (_) => syncNow());
+    // Gdy Recorder (re)connect - natychmiast push aktualny event_config.
+    // Bez tego Recorder musi czekac do 30s az poll sie odpali.
+    server.onRecorderConnect = () {
+      if (_activeEvent != null) {
+        debugPrint('[EventManager] Recorder reconnect -> push config');
+        _sendConfigToRecorder();
+      }
+    };
   }
 
   @override
