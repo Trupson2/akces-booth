@@ -449,14 +449,13 @@ class _RecordingScreenState extends State<RecordingScreen>
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // RotatedBox quarterTurns=1 rotuje CameraPreview 90 CW
-                    // wizualnie - landscape sensor stream -> portrait display.
-                    // Matches FFmpeg transpose=1 w video_processor (WYSIWYG):
-                    // operator widzi DOKLADNIE to co bedzie w finalnym MP4.
-                    // ClipRect zapobiega overflow po rotacji.
+                    // RotatedBox quarterTurns=3 (90 CCW) - dopasowane do
+                    // tego jak OP13 podaje landscape stream, zeby preview
+                    // wyszedl portrait. quarterTurns=1 dawal poziomy obraz
+                    // (rotacja w zla strone). ClipRect = no overflow.
                     ClipRect(
                       child: RotatedBox(
-                        quarterTurns: 1,
+                        quarterTurns: 3,
                         child: CameraPreview(ctrl),
                       ),
                     ),
