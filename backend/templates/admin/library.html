@@ -7,9 +7,23 @@
 <div class="grid lg:grid-cols-2 gap-6">
   <!-- OVERLAYS -->
   <section class="bg-slate-800 rounded-xl p-5">
-    <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
       <h2 class="font-bold text-lg">🖼 Ramki (overlays)</h2>
-      <div class="flex gap-2 text-sm">
+      <div class="flex gap-2 text-sm flex-wrap">
+        <button type="button" onclick="selectAllOverlays(true)"
+                class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded">
+          Zaznacz wszystkie
+        </button>
+        <button type="button" onclick="selectAllOverlays(false)"
+                class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded">
+          Odznacz
+        </button>
+        <button type="button" id="bulk-delete-btn" onclick="bulkDeleteOverlays()"
+                disabled
+                class="bg-red-700 hover:bg-red-600 disabled:bg-slate-800 disabled:cursor-not-allowed
+                       disabled:text-slate-500 px-3 py-1.5 rounded">
+          🗑 Usun zaznaczone (<span id="bulk-count">0</span>)
+        </button>
         <label class="bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded cursor-pointer">
           + Upload
           <input type="file" accept="image/png,image/jpeg,image/webp"
@@ -22,7 +36,14 @@
     <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
       {% for o in overlays %}
         {% set _ov_src = '/storage/' ~ (o.file_path.split('storage/')[-1] if 'storage/' in o.file_path else o.file_path) %}
-        <div class="bg-slate-900 rounded-lg overflow-hidden group relative">
+        <div class="bg-slate-900 rounded-lg overflow-hidden group relative overlay-card"
+             data-overlay-id="{{ o.id }}">
+          <label class="absolute top-1 left-1 z-10 cursor-pointer">
+            <input type="checkbox" class="overlay-checkbox w-5 h-5 accent-red-600
+                                          bg-slate-900/80 rounded"
+                   data-overlay-id="{{ o.id }}"
+                   onclick="event.stopPropagation(); updateBulkCount()">
+          </label>
           <img src="{{ _ov_src }}"
                data-full-src="{{ _ov_src }}"
                data-name="{{ o.name }}"
@@ -196,6 +217,43 @@
     if (!confirm('Usunac?')) return;
     const r = await fetch('/api/library/overlays/' + id, { method: 'DELETE' });
     if (r.ok) location.reload();
+  }
+
+  function selectAllOverlays(on) {
+    document.querySelectorAll('.overlay-checkbox').forEach(cb => { cb.checked = on; });
+    updateBulkCount();
+  }
+
+  function updateBulkCount() {
+    const count = document.querySelectorAll('.overlay-checkbox:checked').length;
+    document.getElementById('bulk-count').textContent = count;
+    document.getElementById('bulk-delete-btn').disabled = count === 0;
+  }
+
+  async function bulkDeleteOverlays() {
+    const ids = Array.from(document.querySelectorAll('.overlay-checkbox:checked'))
+      .map(cb => parseInt(cb.dataset.overlayId, 10))
+      .filter(Boolean);
+    if (ids.length === 0) return;
+    if (!confirm(`Usunac ${ids.length} zaznaczonych ramek?`)) return;
+    const btn = document.getElementById('bulk-delete-btn');
+    btn.disabled = true;
+    btn.textContent = `Usuwam ${ids.length}...`;
+    try {
+      const r = await fetch('/api/library/overlays/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+      alert(`Usunieto: ${data.deleted || ids.length}. Bledy: ${data.errors || 0}.`);
+      location.reload();
+    } catch (e) {
+      alert('Blad bulk delete: ' + e);
+      btn.disabled = false;
+      btn.textContent = `🗑 Usun zaznaczone (${ids.length})`;
+    }
   }
   async function uploadMusic(file) {
     if (!file) return;

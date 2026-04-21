@@ -55,6 +55,29 @@ def delete_overlay_api(overlay_id: int):  # type: ignore[no-untyped-def]
     return jsonify({"status": "ok"})
 
 
+@library_bp.route("/overlays/bulk-delete", methods=["POST"])
+@require_admin
+def bulk_delete_overlays_api():  # type: ignore[no-untyped-def]
+    """Usuwa wiele overlayow za jednym zamachem.
+    Body JSON: {"ids": [1, 2, 3, ...]}
+    Zwraca: {"deleted": N, "errors": M}
+    """
+    data = request.get_json(silent=True) or {}
+    raw_ids = data.get("ids") or []
+    if not isinstance(raw_ids, list):
+        return jsonify({"error": "ids must be list"}), 400
+    deleted = 0
+    errors = 0
+    for raw in raw_ids:
+        try:
+            models.delete_overlay(Config.DB_PATH, int(raw))
+            deleted += 1
+        except Exception as e:  # noqa: BLE001
+            log.warning("bulk delete overlay %r failed: %s", raw, e)
+            errors += 1
+    return jsonify({"deleted": deleted, "errors": errors})
+
+
 @library_bp.route("/music", methods=["GET"])
 @require_admin
 def list_music_api():  # type: ignore[no-untyped-def]
