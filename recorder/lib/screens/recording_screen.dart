@@ -449,18 +449,15 @@ class _RecordingScreenState extends State<RecordingScreen>
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // CameraPreview w FittedBox cover - wypelnia portrait
-                    // viewport (1080x1920), boki landscape streama (1920x1080)
-                    // obciete zeby pasowaly do portrait aspect bez stretchingu.
-                    // SizedBox wewnatrz ma sensor dims, FittedBox skaluje+kropuje.
+                    // RotatedBox quarterTurns=1 rotuje CameraPreview 90 CW
+                    // wizualnie - landscape sensor stream -> portrait display.
+                    // Matches FFmpeg transpose=1 w video_processor (WYSIWYG):
+                    // operator widzi DOKLADNIE to co bedzie w finalnym MP4.
+                    // ClipRect zapobiega overflow po rotacji.
                     ClipRect(
-                      child: FittedBox(
-                        fit: BoxFit.cover,
-                        child: SizedBox(
-                          width: sensorAspect * 1000,
-                          height: 1000,
-                          child: CameraPreview(ctrl),
-                        ),
+                      child: RotatedBox(
+                        quarterTurns: 1,
+                        child: CameraPreview(ctrl),
                       ),
                     ),
                     if (hasOverlay)
