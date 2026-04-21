@@ -240,11 +240,10 @@ class VideoProcessor extends ChangeNotifier {
     final hasText = (top != null && top.isNotEmpty) ||
         (bottom != null && bottom.isNotEmpty);
     if (!hasText) return null;
-    // Priorytet dla overlayu (ramka AI z wypalonym textem) - drawtext tylko
-    // jako fallback dla eventow bez ramki.
-    if (config.overlayPath != null && config.overlayPath!.isNotEmpty) {
-      return null;
-    }
+    // Drawtext zawsze aktywny gdy text_top/bottom sa w evencie - niezaleznie
+    // czy overlay (ramka AI) jest czy nie. Ramki teraz generowane bez tekstu
+    // (Gemini przekrecal pisownie "Adriany" -> "Adriana"), wiec drawtext jest
+    // jedynym zrodlem prawdy dla imion i dat na video.
     final fontPath = await _ensureFontExtracted();
     if (fontPath == null) return null;
 

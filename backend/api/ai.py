@@ -47,16 +47,24 @@ def _have_gemini() -> bool:
 
 
 def _build_imagen_prompt(*, event_type: str, style: str, theme: str,
-                        names: str, event_date: str) -> str:
-    """Fallback prompt jesli Gemini nie odpowie."""
+                        names: str, event_date: str) -> str:  # noqa: ARG001
+    """Fallback prompt jesli Gemini nie odpowie.
+
+    WAZNE: ramki generujemy BEZ TEKSTU. Gemini image model notorycznie
+    przekreca pisownie ("Adriany" -> "Adriana", itp.). Tekst wypisujemy
+    na video w Recorderze przez FFmpeg drawtext z text_top/text_bottom
+    eventu - gwarantowana poprawna pisownia.
+    """
     return (
         f"Transparent PNG 1080x1920 portrait photo booth overlay for {event_type}. "
         f"Style: {style}. Theme: {theme or 'elegant'}. "
         f"Decorative border at the edges (top, bottom, corners, sides) with "
         f"MEDIUM thickness 10-15%% of image width. Center 65%% x 70%% area "
-        f"completely empty so video appears there. Names: {names} at TOP band. "
-        f"Date: {event_date} at BOTTOM band. Elegant, substantial ornaments - "
-        f"not too thin, not too chunky. No inner frame lines crossing center."
+        f"completely empty so video appears there. "
+        f"IMPORTANT: NO TEXT, NO WORDS, NO LETTERS, NO NAMES, NO DATES anywhere "
+        f"on the image - pure decorative ornaments only (flowers, swirls, "
+        f"geometric patterns). Elegant, substantial ornaments - not too thin, "
+        f"not too chunky. No inner frame lines crossing center."
     )
 
 
@@ -87,9 +95,10 @@ def _refine_prompt_with_gemini(**kwargs: str) -> str:
                 "- Center area 65%% width x 70%% height must be COMPLETELY EMPTY\n"
                 "  (video will appear there - do not put anything in the middle)\n"
                 "- Decorations: ornate corners + flowing side borders + top/bottom bands\n"
-                "- Names at TOP band (above video area, centered)\n"
-                "- Date at BOTTOM band (below video area, centered)\n"
-                "- Elegant typography, medium size (not gigantic)\n"
+                "- *** ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO NAMES, NO DATES ***\n"
+                "  on the image. Text will be added separately by the video processor.\n"
+                "  The frame must be PURELY DECORATIVE - flowers, swirls, geometric\n"
+                "  patterns, borders. NOT A SINGLE CHARACTER anywhere.\n"
                 f"- Style matches {kwargs['style']} aesthetic\n"
                 "- NO central ornaments crossing video area, NO inner rectangle frame lines\n"
                 "- Output orientation: PORTRAIT / vertical (phone aspect 9:16)\n\n"
@@ -156,7 +165,7 @@ def _generate_images(prompt: str, count: int = 3) -> list[bytes]:
 def _remove_bg_floodfill(
     img: "Image.Image",
     *,
-    threshold: int = 240,
+    threshold: int = 220,
     feather_px: int = 4,
 ) -> "Image.Image":
     """Usuwa jasne tlo connected z brzegami (flood-fill od 4 rogow).
@@ -220,7 +229,7 @@ def make_frame_transparent(
     white_brightness: int = 252,
     white_saturation: float = 0.03,
     bg_floodfill: bool = True,
-    bg_threshold: int = 240,
+    bg_threshold: int = 220,
     bg_feather_px: int = 4,
 ) -> bytes:
     """Post-process ramki: resize do portrait output + transparentne centrum +
