@@ -380,11 +380,34 @@ class _RecordingScreenState extends State<RecordingScreen>
         }
         // Camera preview w portrait - ctrl.value.aspectRatio zwraca sensor w/h
         // (landscape 16:9 = 1.77), w portrait viewport invertujemy do 9:16.
-        return Center(
-          child: AspectRatio(
-            aspectRatio: 1 / ctrl.value.aspectRatio,
-            child: CameraPreview(ctrl),
-          ),
+        // Stack: kamera + overlay PNG (ramka z eventu) jesli jest przypisana.
+        // IgnorePointer zeby taps leciały do kamery/UI pod spodem.
+        // Consumer<StationClient> zeby reaktywnie rebuild gdy Station
+        // wrzuci nowy overlay_url i Recorder go sciagnie.
+        return Consumer<StationClient>(
+          builder: (ctx, client, _) {
+            final overlayPath = client.lastEventConfig?.overlayPath;
+            final hasOverlay = overlayPath != null &&
+                File(overlayPath).existsSync();
+            return Center(
+              child: AspectRatio(
+                aspectRatio: 1 / ctrl.value.aspectRatio,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CameraPreview(ctrl),
+                    if (hasOverlay)
+                      IgnorePointer(
+                        child: Image.file(
+                          File(overlayPath),
+                          fit: BoxFit.fill,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
     }
   }

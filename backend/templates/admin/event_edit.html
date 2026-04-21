@@ -104,16 +104,26 @@
     <h2 class="text-xl font-bold mb-3">Filmy z eventu ({{ videos|length }})</h2>
     <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
       {% for v in videos %}
-        <a href="/v/{{ v.short_id }}" target="_blank"
-           class="bg-slate-800 rounded-lg overflow-hidden hover:ring-2 ring-indigo-500">
-          <video class="w-full aspect-[9/16] object-cover bg-black" muted preload="metadata">
-            <source src="/api/videos/{{ v.short_id }}/stream#t=0.5" type="video/mp4">
-          </video>
-          <div class="p-2 text-xs">
-            <div class="font-mono text-indigo-300">{{ v.short_id }}</div>
-            <div class="text-slate-400">{{ v.view_count }} views · {{ v.download_count }} pobran</div>
-          </div>
-        </a>
+        <div class="bg-slate-800 rounded-lg overflow-hidden hover:ring-2 ring-indigo-500 group relative">
+          <a href="/v/{{ v.short_id }}" target="_blank" class="block">
+            <video class="w-full aspect-[9/16] object-cover bg-black" muted preload="metadata">
+              <source src="/api/videos/{{ v.short_id }}/stream#t=0.5" type="video/mp4">
+            </video>
+            <div class="p-2 text-xs">
+              <div class="font-mono text-indigo-300">{{ v.short_id }}</div>
+              <div class="text-slate-400">{{ v.view_count }} views · {{ v.download_count }} pobran</div>
+            </div>
+          </a>
+          <form method="POST" action="{{ url_for('admin.delete_video_route', video_id=v.id) }}"
+                onsubmit="return confirm('Usunac film {{ v.short_id }} z bazy i dysku?');"
+                class="absolute top-1 right-1">
+            <button type="submit"
+                    class="bg-red-600 hover:bg-red-700 text-xs px-2 py-0.5 rounded
+                           opacity-0 group-hover:opacity-100 transition">
+              ✕
+            </button>
+          </form>
+        </div>
       {% endfor %}
     </div>
   </section>

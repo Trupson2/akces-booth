@@ -360,6 +360,39 @@ def list_videos_for_event(db_path: Path, event_id: int) -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
+def delete_video(db_path: Path, video_id: int) -> dict[str, Any] | None:
+    """Usuwa film z bazy + plik z dysku. Zwraca usunietego dict lub None
+    jesli nie istnial. Brak pliku na dysku nie jest bledem (moze admin
+    skasowal manualnie) - usuwamy DB row.
+    """
+    import os as _os
+    with get_conn(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM videos WHERE id=?", (video_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        record = dict(row)
+        conn.execute("DELETE FROM videos WHERE id=?", (video_id,))
+    # Usun plik z dysku (absolute lub relative do BASE_DIR).
+    try:
+        fp = record.get("file_path")
+        if fp:
+            p = Path(fp)
+            if not p.is_absolute():
+                # Config.BASE_DIR - trzeba zaimportowac dynamicznie zeby
+                # uniknac circular (models nie zaleznosc od config).
+                from config import Config  # noqa: WPS433
+                p = Config.BASE_DIR / p
+            if p.exists():
+                _os.unlink(p)
+    except Exception:
+        # Plik moze nie istniec (juz usuniety) albo permission denied -
+        # DB zostal wyczyszczony, log na zewnatrz zadba o warning.
+        pass
+    return record
+
+
 def increment_view_count(db_path: Path, video_id: int) -> None:
     with get_conn(db_path) as conn:
         conn.execute(

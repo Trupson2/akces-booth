@@ -191,3 +191,21 @@ def skip_publish(video_id: int):  # type: ignore[no-untyped-def]
     models.unmark_video_publish(Config.DB_PATH, video_id)
     flash("Usunieto z kolejki publikacji.", "ok")
     return redirect(url_for("admin.publish_queue"))
+
+
+@admin_bp.route("/videos/<int:video_id>/delete", methods=["POST"])
+@require_admin
+def delete_video_route(video_id: int):  # type: ignore[no-untyped-def]
+    """Usuwa film z DB + plik z dysku. Po usunieciu redirect zwraca
+    z powrotem do poprzedniego ekranu (event_edit albo dashboard).
+    """
+    rec = models.delete_video(Config.DB_PATH, video_id)
+    if rec is None:
+        flash("Film nie istnial (moze juz usuniety).", "err")
+    else:
+        flash(f"Usunieto film {rec.get('short_id') or video_id}.", "ok")
+    # Wracamy do event_edit jesli znamy event_id, inaczej dashboard.
+    event_id = rec.get("event_id") if rec else None
+    if event_id:
+        return redirect(url_for("admin.event_edit", event_id=event_id))
+    return redirect(url_for("admin.dashboard"))
