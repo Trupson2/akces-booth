@@ -355,7 +355,12 @@ class VideoProcessor extends ChangeNotifier {
     _VideoDims videoDims = const _VideoDims(1080, 1920),
     _DrawTextAssets? drawText,
   }) {
-    final args = <String>['-y', '-i', inputPath];
+    // -noautorotate: FFmpeg domyslnie auto-rotuje input wedlug Display Matrix
+    // metadata (nawet gdy FFprobe raportuje rotation=0, niektore encoder'y
+    // ustawiaja rotation=90 w rot_matrix ktorego probe moze nie widziec).
+    // Chcemy surowe piksele zeby transpose=1 w filter_complex dzialal
+    // deterministycznie niezaleznie od metadata.
+    final args = <String>['-y', '-noautorotate', '-i', inputPath];
 
     // Music input (optional)
     final hasMusic = config.musicPath != null &&
