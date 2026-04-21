@@ -160,7 +160,8 @@ class CameraService extends ChangeNotifier {
       ResolutionPreset.high,
     ];
 
-    final targetFps = mode == RecordingMode.slowMo120 ? 120 : null;
+    // 30 fps = default (null nie forsuje fps), 60/120 = explicit targetFps.
+    final targetFps = mode == RecordingMode.normal ? null : mode.fps;
 
     CameraController? built;
     Object? lastError;

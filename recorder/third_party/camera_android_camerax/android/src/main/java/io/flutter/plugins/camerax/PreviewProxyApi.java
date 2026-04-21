@@ -56,16 +56,12 @@ class PreviewProxyApi extends PigeonApiPreview {
     if (resolutionSelector != null) {
       builder.setResolutionSelector(resolutionSelector);
     }
-    // AKCES BOOTH FORK: wlacz preview stabilization (API 33+, CameraX 1.3+).
-    // Docs: "If the device does not support preview stabilization, then the
-    // preview stabilization will not be enabled" - graceful fallback.
-    // OP13 wspiera, daje jakosc blisko natywnej "Ultra Stabilization".
-    try {
-      builder.setPreviewStabilizationEnabled(true);
-    } catch (Throwable t) {
-      android.util.Log.w("AkcesBoothFork",
-          "setPreviewStabilizationEnabled fail: " + t.getMessage());
-    }
+    // AKCES BOOTH FORK: setPreviewStabilizationEnabled wywalone -
+    // wymaga kombinacji tylko Preview+VideoCapture, a Flutter camera plugin
+    // bindu je razem z ImageCapture + ImageAnalysis co powoduje
+    // "No supported surface combination" IllegalArgumentException.
+    // EIS na recording osiagamy przez VideoCaptureProxyApi (basic EIS,
+    // kompatybilny z kazdym use-case combo).
 
     if (targetFpsRange != null) {
       Camera2Interop.Extender<Preview> extender = new Camera2Interop.Extender<>(builder);

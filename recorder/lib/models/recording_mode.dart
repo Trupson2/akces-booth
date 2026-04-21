@@ -13,6 +13,9 @@ enum RecordingMode {
   /// 30 fps - domyslny, szybka inicjalizacja, pewne dzialanie.
   normal,
 
+  /// 60 fps - plynne nagranie z wiekszym klatkazem, dobre do boomerangu.
+  fps60,
+
   /// 120 fps - slow-motion (beta). Platform channel dla 240 fps w Sesji 6.
   slowMo120,
 }
@@ -21,7 +24,9 @@ extension RecordingModeX on RecordingMode {
   String get label {
     switch (this) {
       case RecordingMode.normal:
-        return 'Normal';
+        return 'Normal 30';
+      case RecordingMode.fps60:
+        return '60 fps';
       case RecordingMode.slowMo120:
         return 'Slow-mo 120';
     }
@@ -31,6 +36,8 @@ extension RecordingModeX on RecordingMode {
     switch (this) {
       case RecordingMode.normal:
         return 30;
+      case RecordingMode.fps60:
+        return 60;
       case RecordingMode.slowMo120:
         return 120;
     }
