@@ -179,12 +179,17 @@ def _remove_bg_floodfill(
     r, g, b, a = arr[..., 0], arr[..., 1], arr[..., 2], arr[..., 3]
     bright = (r >= threshold) & (g >= threshold) & (b >= threshold)
     labeled, _n = label(bright)
-    h, w = labeled.shape
-    bg_labels: set[int] = set()
-    for corner in [(0, 0), (0, w - 1), (h - 1, 0), (h - 1, w - 1)]:
-        lbl = int(labeled[corner])
-        if lbl > 0:
-            bg_labels.add(lbl)
+    # Flood-fill od CALYCH krawedzi (nie tylko 4 rogow): kazdy piksel na
+    # obwodzie obrazu startuje flood-fill. Lapiemy tak tez izolowane biale
+    # paski na gorze/dole (text labels w AI ramkach), ktore NIE lacza sie
+    # z rogami bo rogi maja kwiaty (non-bright).
+    edge_labels = np.concatenate([
+        labeled[0, :],
+        labeled[-1, :],
+        labeled[:, 0],
+        labeled[:, -1],
+    ])
+    bg_labels: set[int] = {int(x) for x in np.unique(edge_labels) if x > 0}
     if not bg_labels:
         return img
     bg_mask = np.isin(labeled, list(bg_labels))
