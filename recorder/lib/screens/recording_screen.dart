@@ -43,6 +43,11 @@ class _RecordingScreenState extends State<RecordingScreen>
   bool _lastFpsDegraded = false;
   bool _lastResDegraded = false;
 
+  /// Cache-owane w initState - dispose() nie moze uzywac context.read
+  /// (widget juz jest disposed, mounted=false).
+  StationClient? _stationClient;
+  BuildContext? _cachedContext;
+
   @override
   void initState() {
     super.initState();
@@ -58,7 +63,10 @@ class _RecordingScreenState extends State<RecordingScreen>
 
     // Sluchamy komend ze Station (auto-start/stop). Nadpisujemy globalny
     // handler z app.dart - ten zostanie przywrocony w dispose.
+    // Cache-ujemy referencje dla dispose (context juz nie bedzie valid).
     final client = context.read<StationClient>();
+    _stationClient = client;
+    _cachedContext = context;
     client.onStartRequested = () {
       if (!mounted) return;
       if (!context.read<CameraService>().isRecording) {
@@ -122,11 +130,22 @@ class _RecordingScreenState extends State<RecordingScreen>
 
   @override
   void dispose() {
-    // Przywracamy globalny handler w app.dart - od teraz start ze Station
-    // otworzy nowy RecordingScreen z autoStart zamiast krzyczec do zombie
-    // widgeta.
-    if (mounted) {
-      installGlobalStartHandler(context);
+    // Wyczysc dangling callbacki zanim widget zniknie - inaczej gdy Station
+    // wysle kolejne start_recording po zamknieciu RecordingScreen, callback
+    // odpali context.read na disposed widgecie = Null check crash apki.
+    _stationClient?.onStartRequested = null;
+    _stationClient?.onStopRequested = null;
+    // Ponownie zainstaluj globalny handler w app.dart zeby start ze Station
+    // otworzyl nowy RecordingScreen z autoStart. mounted=false w dispose
+    // wiec uzywamy zcachowanego contextu z initState.
+    final ctx = _cachedContext;
+    if (ctx != null) {
+      try {
+        installGlobalStartHandler(ctx);
+      } catch (_) {
+        // ctx moze byc disposed - OK, globalny handler zostanie przywrocony
+        // przy nastepnym buildzie HomeScreen.
+      }
     }
     context.read<CameraService>().removeListener(_onCameraChange);
     _autoStopTimer?.cancel();
@@ -386,9 +405,38 @@ class _RecordingScreenState extends State<RecordingScreen>
         // wrzuci nowy overlay_url i Recorder go sciagnie.
         return Consumer<StationClient>(
           builder: (ctx, client, _) {
-            final overlayPath = client.lastEventConfig?.overlayPath;
+            final cfg = client.lastEventConfig;
+            final overlayPath = cfg?.overlayPath;
             final hasOverlay = overlayPath != null &&
                 File(overlayPath).existsSync();
+            final textTop = cfg?.textTop?.trim();
+            final textBottom = cfg?.textBottom?.trim();
+            final hasTextTop = textTop != null && textTop.isNotEmpty;
+            final hasTextBottom = textBottom != null && textBottom.isNotEmpty;
+            // Styl tekstu symuluje finalny drawtext FFmpeg: bialy bold +
+            // pol-przezroczyste czarne tlo + cien. Fontsize 18sp ~
+            // h*0.032 po scale do preview AspectRatio.
+            TextStyle textStyle() => const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black87,
+                      blurRadius: 2,
+                      offset: Offset(1, 1),
+                    ),
+                  ],
+                );
+            Widget textBox(String s) => Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(s, style: textStyle()),
+                );
             return Center(
               child: AspectRatio(
                 aspectRatio: 1 / ctrl.value.aspectRatio,
@@ -401,6 +449,26 @@ class _RecordingScreenState extends State<RecordingScreen>
                         child: Image.file(
                           File(overlayPath),
                           fit: BoxFit.fill,
+                        ),
+                      ),
+                    // Text overlay - symulacja FFmpeg drawtext, zeby
+                    // operator widzial jak finalny film bedzie wygladal.
+                    if (hasTextTop)
+                      Positioned(
+                        top: 12,
+                        left: 0,
+                        right: 0,
+                        child: IgnorePointer(
+                          child: Center(child: textBox(textTop)),
+                        ),
+                      ),
+                    if (hasTextBottom)
+                      Positioned(
+                        bottom: 12,
+                        left: 0,
+                        right: 0,
+                        child: IgnorePointer(
+                          child: Center(child: textBox(textBottom)),
                         ),
                       ),
                   ],
