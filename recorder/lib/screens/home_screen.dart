@@ -48,6 +48,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: const [
                       _TopBar(),
+                      SizedBox(height: 8),
+                      _EventBadge(),
                       SizedBox(height: 12),
                       _StatusColumn(),
                       SizedBox(height: 12),
@@ -200,6 +202,66 @@ class _TopBar extends StatelessWidget {
           TextButton(
             onPressed: () => Navigator.of(dCtx).pop(),
             child: const Text('OK', style: TextStyle(color: AppTheme.primary)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Kompaktowy pasek z nazwa aktywnego eventu (dostarczonego przez Station
+/// przez event_config WS). Wyswietla sie tylko gdy event jest aktywny -
+/// inaczej zera pionowej wysokosci (sam SizedBox.shrink).
+class _EventBadge extends StatelessWidget {
+  const _EventBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final client = context.watch<StationClient>();
+    final cfg = client.lastEventConfig;
+    final name = cfg?.eventName.trim();
+    if (name == null || name.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppTheme.primary, AppTheme.accent],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.celebration_rounded, color: Colors.white, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'AKTYWNY EVENT',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 9,
+                    letterSpacing: 1.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  name,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

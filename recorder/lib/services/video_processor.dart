@@ -5,6 +5,7 @@ import 'package:ffmpeg_kit_flutter_new/ffmpeg_session.dart';
 import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -109,6 +110,12 @@ class VideoProcessor extends ChangeNotifier {
       }
     }
 
+    // Drawtext fallback: jesli event ma text_top/text_bottom ale nie ma
+    // przypisanej ramki (overlay) - rysujemy prosty tekst na wideo przez
+    // FFmpeg drawtext. Potrzebuje font file (TTF) i tekst w temp pliku
+    // (textfile= unika zmagan z escape FFmpeg drawtext syntax).
+    final drawText = await _prepareDrawText(config, processedDir);
+
     final args = _buildArgs(
       inputPath: inputPath,
       outputPath: outputPath,
@@ -116,6 +123,7 @@ class VideoProcessor extends ChangeNotifier {
       actualDuration: actualDuration,
       musicOffsetSec: musicOffsetSec,
       videoDims: dims,
+      drawText: drawText,
     );
 
     debugPrint('[FFmpeg] args: ${args.join(" ")}');
@@ -189,6 +197,75 @@ class VideoProcessor extends ChangeNotifier {
     onProgress?.call(1.0, 'Gotowe');
     debugPrint('[FFmpeg] output: $outputPath (${await out.length()} bytes)');
     return outputPath;
+  }
+
+  /// Cache na path do extracted font TTF.
+  String? _cachedFontPath;
+
+  /// Kopiuje Roboto-Bold.ttf z assets do docs/fonts/ przy pierwszym wywolaniu.
+  /// Zwraca bezwzgledna sciezke do TTF. FFmpeg drawtext potrzebuje tego jako
+  /// fontfile=. Cache globalny przez jeden cykl zycia procesu.
+  Future<String?> _ensureFontExtracted() async {
+    if (_cachedFontPath != null && File(_cachedFontPath!).existsSync()) {
+      return _cachedFontPath;
+    }
+    try {
+      final docsDir = await getApplicationDocumentsDirectory();
+      final fontsDir = Directory(p.join(docsDir.path, 'fonts'));
+      if (!await fontsDir.exists()) {
+        await fontsDir.create(recursive: true);
+      }
+      final target = File(p.join(fontsDir.path, 'Roboto-Bold.ttf'));
+      if (!await target.exists() || await target.length() == 0) {
+        final data = await rootBundle.load('assets/fonts/Roboto-Bold.ttf');
+        await target.writeAsBytes(data.buffer.asUint8List(), flush: true);
+      }
+      _cachedFontPath = target.path;
+      return _cachedFontPath;
+    } catch (e) {
+      debugPrint('[VideoProcessor] font extract fail: $e');
+      return null;
+    }
+  }
+
+  /// Przygotowuje drawtext: ekstraktuje font, pisze text do temp plikow.
+  /// Zwraca null gdy nie ma czego rysowac (brak textow albo event ma overlay)
+  /// albo gdy font extract zawiedzie.
+  Future<_DrawTextAssets?> _prepareDrawText(
+    ProcessingConfig config,
+    Directory processedDir,
+  ) async {
+    final top = config.textTop?.trim();
+    final bottom = config.textBottom?.trim();
+    final hasText = (top != null && top.isNotEmpty) ||
+        (bottom != null && bottom.isNotEmpty);
+    if (!hasText) return null;
+    // Priorytet dla overlayu (ramka AI z wypalonym textem) - drawtext tylko
+    // jako fallback dla eventow bez ramki.
+    if (config.overlayPath != null && config.overlayPath!.isNotEmpty) {
+      return null;
+    }
+    final fontPath = await _ensureFontExtracted();
+    if (fontPath == null) return null;
+
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    String? topFile;
+    String? bottomFile;
+    if (top != null && top.isNotEmpty) {
+      final f = File(p.join(processedDir.path, 'text_top_$ts.txt'));
+      await f.writeAsString(top, flush: true);
+      topFile = f.path;
+    }
+    if (bottom != null && bottom.isNotEmpty) {
+      final f = File(p.join(processedDir.path, 'text_bottom_$ts.txt'));
+      await f.writeAsString(bottom, flush: true);
+      bottomFile = f.path;
+    }
+    return _DrawTextAssets(
+      fontPath: fontPath,
+      topTextFile: topFile,
+      bottomTextFile: bottomFile,
+    );
   }
 
   /// Wyciagnij actual duration video streamu przez FFprobe.
@@ -270,6 +347,7 @@ class VideoProcessor extends ChangeNotifier {
     required Duration actualDuration,
     int musicOffsetSec = 0,
     _VideoDims videoDims = const _VideoDims(1080, 1920),
+    _DrawTextAssets? drawText,
   }) {
     final args = <String>['-y', '-i', inputPath];
 
@@ -297,6 +375,7 @@ class VideoProcessor extends ChangeNotifier {
       hasOverlay: hasOverlay,
       actualDuration: actualDuration,
       videoDims: videoDims,
+      drawText: drawText,
     );
     args.addAll(['-filter_complex', filter, '-map', '[vout]']);
 
@@ -333,6 +412,7 @@ class VideoProcessor extends ChangeNotifier {
     required bool hasOverlay,
     required Duration actualDuration,
     _VideoDims videoDims = const _VideoDims(1080, 1920),
+    _DrawTextAssets? drawText,
   }) {
     final parts = <String>[];
     // Stabilizacja: FFmpeg deshake 1-pass przed resztą filtrów.
@@ -378,6 +458,43 @@ class VideoProcessor extends ChangeNotifier {
       currentLabel = '[ov]';
     }
 
+    // Drawtext fallback - wlaczony tylko gdy event ma text_top/text_bottom
+    // i NIE ma overlayu (ramki AI). Rysujemy tekst bialy + cien + box
+    // polprzezroczysty dla czytelnosci na roznych tlach.
+    // Sciezki do font/textfile eskejpujemy slash'em zeby FFmpeg nie
+    // interpretowal : w sciezkach Windowsowych jako separator filtr-opcji.
+    if (drawText != null) {
+      final drawtextFilters = <String>[];
+      final fontEsc = _escapeFfmpegPath(drawText.fontPath);
+      // Styl:
+      //  - fontsize = h*0.032 (~62px na 1920p portrait, dobre do czytania
+      //    z odleglosci ~2m, nie dominuje kadru)
+      //  - fontcolor = white z lekka alpha dla miekszego akcentu
+      //  - box z 40% alpha czarna + padding 12px = czytelne na kwiatach
+      //  - shadowx/y = subtelny cien
+      const style = 'fontsize=h*0.032:fontcolor=white:'
+          'box=1:boxcolor=black@0.35:boxborderw=12:'
+          'shadowcolor=black@0.6:shadowx=2:shadowy=2';
+      if (drawText.topTextFile != null) {
+        final txtEsc = _escapeFfmpegPath(drawText.topTextFile!);
+        drawtextFilters.add(
+          "drawtext=fontfile='$fontEsc':textfile='$txtEsc':"
+          'x=(w-text_w)/2:y=h*0.04:$style',
+        );
+      }
+      if (drawText.bottomTextFile != null) {
+        final txtEsc = _escapeFfmpegPath(drawText.bottomTextFile!);
+        drawtextFilters.add(
+          "drawtext=fontfile='$fontEsc':textfile='$txtEsc':"
+          'x=(w-text_w)/2:y=h-text_h-h*0.04:$style',
+        );
+      }
+      if (drawtextFilters.isNotEmpty) {
+        parts.add('$currentLabel${drawtextFilters.join(",")}[dt]');
+        currentLabel = '[dt]';
+      }
+    }
+
     // Final rename do [vout]
     parts.add('${currentLabel}null[vout]');
 
@@ -391,6 +508,29 @@ class _VideoDims {
   final int width;
   final int height;
   const _VideoDims(this.width, this.height);
+}
+
+/// Assets dla drawtext fallback: font + sciezki do temp plikow z tekstem.
+/// Oba topTextFile i bottomTextFile moga byc null niezaleznie.
+class _DrawTextAssets {
+  final String fontPath;
+  final String? topTextFile;
+  final String? bottomTextFile;
+  const _DrawTextAssets({
+    required this.fontPath,
+    this.topTextFile,
+    this.bottomTextFile,
+  });
+}
+
+/// Escape sciezki do FFmpeg drawtext filter - FFmpeg traktuje `:` jako
+/// separator opcji wewnatrz filtra, a backslash jako escape. Musimy:
+/// - C: -> C\\:  (escape `:` w sciezce Win)
+/// - \ -> \\   (escape backslash)
+/// Ciapki otaczajace cala sciezke robimy z pojedynczych cudzyslowow
+/// ('path') w call site zeby nie kolidowac z wartosciami opcji.
+String _escapeFfmpegPath(String path) {
+  return path.replaceAll(r'\', r'\\').replaceAll(':', r'\:');
 }
 
 // --- Per-template filter builders -------------------------------------------
