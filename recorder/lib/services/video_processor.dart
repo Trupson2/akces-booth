@@ -202,13 +202,32 @@ class VideoProcessor extends ChangeNotifier {
   /// Cache na path do extracted font TTF.
   String? _cachedFontPath;
 
-  /// Kopiuje Roboto-Bold.ttf z assets do docs/fonts/ przy pierwszym wywolaniu.
-  /// Zwraca bezwzgledna sciezke do TTF. FFmpeg drawtext potrzebuje tego jako
-  /// fontfile=. Cache globalny przez jeden cykl zycia procesu.
+  /// Zwraca sciezke do TTF fontu dla FFmpeg drawtext.
+  ///
+  /// Priorytet: 1) Android system font (dziala zawsze, world-readable),
+  /// 2) bundled Roboto-Bold.ttf extracted do docs/fonts/ (fallback).
+  ///
+  /// Dlaczego system first: mobile ffmpeg-kit builds maja ograniczony
+  /// dostep do zewnetrznych paths - Android SELinux czasem blokuje
+  /// odczyt z app-specific directory pod native kodem. /system/fonts/
+  /// jest world-readable i native kod ma do niego dostep.
   Future<String?> _ensureFontExtracted() async {
     if (_cachedFontPath != null && File(_cachedFontPath!).existsSync()) {
       return _cachedFontPath;
     }
+    // 1) System font - pewne rozwiazanie dla Android.
+    for (final sys in const [
+      '/system/fonts/Roboto-Regular.ttf',
+      '/system/fonts/Roboto-Bold.ttf',
+      '/system/fonts/DroidSans.ttf',
+    ]) {
+      if (File(sys).existsSync()) {
+        _cachedFontPath = sys;
+        debugPrint('[VideoProcessor] font: using system $sys');
+        return _cachedFontPath;
+      }
+    }
+    // 2) Bundled fallback - jesli jakims dziwnym sposobem brak system font.
     try {
       final docsDir = await getApplicationDocumentsDirectory();
       final fontsDir = Directory(p.join(docsDir.path, 'fonts'));
@@ -221,6 +240,7 @@ class VideoProcessor extends ChangeNotifier {
         await target.writeAsBytes(data.buffer.asUint8List(), flush: true);
       }
       _cachedFontPath = target.path;
+      debugPrint('[VideoProcessor] font: using bundled ${target.path}');
       return _cachedFontPath;
     } catch (e) {
       debugPrint('[VideoProcessor] font extract fail: $e');
@@ -228,12 +248,12 @@ class VideoProcessor extends ChangeNotifier {
     }
   }
 
-  /// Przygotowuje drawtext: ekstraktuje font, pisze text do temp plikow.
-  /// Zwraca null gdy nie ma czego rysowac (brak textow albo event ma overlay)
-  /// albo gdy font extract zawiedzie.
+  /// Przygotowuje drawtext: ekstraktuje font, eskejpuje text do inline.
+  /// Zwraca null gdy nie ma czego rysowac albo gdy font extract zawiedzie.
   Future<_DrawTextAssets?> _prepareDrawText(
     ProcessingConfig config,
-    Directory processedDir,
+    Directory processedDir, // nadal przyjmujemy ale nie uzywamy (byl
+    // textfile=), zostawiamy na przyszle uzycie.
   ) async {
     final top = config.textTop?.trim();
     final bottom = config.textBottom?.trim();
@@ -247,23 +267,10 @@ class VideoProcessor extends ChangeNotifier {
     final fontPath = await _ensureFontExtracted();
     if (fontPath == null) return null;
 
-    final ts = DateTime.now().millisecondsSinceEpoch;
-    String? topFile;
-    String? bottomFile;
-    if (top != null && top.isNotEmpty) {
-      final f = File(p.join(processedDir.path, 'text_top_$ts.txt'));
-      await f.writeAsString(top, flush: true);
-      topFile = f.path;
-    }
-    if (bottom != null && bottom.isNotEmpty) {
-      final f = File(p.join(processedDir.path, 'text_bottom_$ts.txt'));
-      await f.writeAsString(bottom, flush: true);
-      bottomFile = f.path;
-    }
     return _DrawTextAssets(
       fontPath: fontPath,
-      topTextFile: topFile,
-      bottomTextFile: bottomFile,
+      topText: (top != null && top.isNotEmpty) ? top : null,
+      bottomText: (bottom != null && bottom.isNotEmpty) ? bottom : null,
     );
   }
 
@@ -474,17 +481,17 @@ class VideoProcessor extends ChangeNotifier {
       const style = 'fontsize=h*0.032:fontcolor=white:'
           'box=1:boxcolor=black@0.35:boxborderw=12:'
           'shadowcolor=black@0.6:shadowx=2:shadowy=2';
-      if (drawText.topTextFile != null) {
-        final txtEsc = _escapeFfmpegPath(drawText.topTextFile!);
+      if (drawText.topText != null) {
+        final esc = _escapeFfmpegText(drawText.topText!);
         drawtextFilters.add(
-          'drawtext=fontfile=$fontEsc:textfile=$txtEsc:'
+          "drawtext=fontfile=$fontEsc:text='$esc':"
           'x=(w-text_w)/2:y=h*0.04:$style',
         );
       }
-      if (drawText.bottomTextFile != null) {
-        final txtEsc = _escapeFfmpegPath(drawText.bottomTextFile!);
+      if (drawText.bottomText != null) {
+        final esc = _escapeFfmpegText(drawText.bottomText!);
         drawtextFilters.add(
-          'drawtext=fontfile=$fontEsc:textfile=$txtEsc:'
+          "drawtext=fontfile=$fontEsc:text='$esc':"
           'x=(w-text_w)/2:y=h-text_h-h*0.04:$style',
         );
       }
@@ -509,16 +516,16 @@ class _VideoDims {
   const _VideoDims(this.width, this.height);
 }
 
-/// Assets dla drawtext fallback: font + sciezki do temp plikow z tekstem.
-/// Oba topTextFile i bottomTextFile moga byc null niezaleznie.
+/// Assets dla drawtext fallback: font + tekst inline (text=).
+/// Oba topText i bottomText moga byc null niezaleznie.
 class _DrawTextAssets {
   final String fontPath;
-  final String? topTextFile;
-  final String? bottomTextFile;
+  final String? topText;
+  final String? bottomText;
   const _DrawTextAssets({
     required this.fontPath,
-    this.topTextFile,
-    this.bottomTextFile,
+    this.topText,
+    this.bottomText,
   });
 }
 
@@ -530,6 +537,21 @@ class _DrawTextAssets {
 /// ('path') w call site zeby nie kolidowac z wartosciami opcji.
 String _escapeFfmpegPath(String path) {
   return path.replaceAll(r'\', r'\\').replaceAll(':', r'\:');
+}
+
+/// Escape tekstu do drawtext text='...' opcji.
+/// FFmpeg drawtext w quoted string obsluguje backslash escape dla:
+/// - `\` -> `\\`
+/// - `'` -> `\'` (zamykalby quoted string)
+/// - `%` i `\n` sa specjalne ale zostawiamy literal (user raczej nie wpisze)
+/// Polskie znaki (ą, ć, ę) leca jako UTF-8 bytes bez escape - FFmpeg text
+/// param jest raw string, kodowanie trzyma system file-level.
+String _escapeFfmpegText(String s) {
+  return s
+      .replaceAll(r'\', r'\\')
+      .replaceAll("'", r"\'")
+      .replaceAll('%', r'\%')
+      .replaceAll('\n', r'\n');
 }
 
 // --- Per-template filter builders -------------------------------------------
