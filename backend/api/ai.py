@@ -153,6 +153,56 @@ def _generate_images(prompt: str, count: int = 3) -> list[bytes]:
     return images
 
 
+def _remove_bg_floodfill(
+    img: "Image.Image",
+    *,
+    threshold: int = 240,
+    feather_px: int = 4,
+) -> "Image.Image":
+    """Usuwa jasne tlo connected z brzegami (flood-fill od 4 rogow).
+    Chroni jasne detale wewnatrz kompozycji (rozowe roze, srebrne ornamenty)
+    bo liczy tylko connected component dotykajacy brzegu.
+
+    threshold: min RGB (per channel) zeby pixel byl uznany za "biel".
+    feather_px: Gaussian blur mask bg na granicy (smooth edge blend).
+    """
+    try:
+        import numpy as np  # noqa: WPS433
+        from scipy.ndimage import label  # noqa: WPS433
+    except ImportError:
+        log.warning("numpy/scipy not available - skipping bg floodfill")
+        return img
+
+    arr = np.array(img)
+    if arr.ndim != 3 or arr.shape[2] != 4:
+        return img
+    r, g, b, a = arr[..., 0], arr[..., 1], arr[..., 2], arr[..., 3]
+    bright = (r >= threshold) & (g >= threshold) & (b >= threshold)
+    labeled, _n = label(bright)
+    h, w = labeled.shape
+    bg_labels: set[int] = set()
+    for corner in [(0, 0), (0, w - 1), (h - 1, 0), (h - 1, w - 1)]:
+        lbl = int(labeled[corner])
+        if lbl > 0:
+            bg_labels.add(lbl)
+    if not bg_labels:
+        return img
+    bg_mask = np.isin(labeled, list(bg_labels))
+
+    # Feather na granicy bg: blur maski bg, odejmuj od alpha.
+    bg_mask_u8 = (bg_mask.astype(np.uint8) * 255)
+    if feather_px > 0:
+        bg_mask_img = Image.fromarray(bg_mask_u8, mode="L").filter(
+            ImageFilter.GaussianBlur(radius=feather_px)
+        )
+        bg_mask_u8 = np.array(bg_mask_img)
+    bg_norm = bg_mask_u8.astype(np.float32) / 255.0
+
+    new_alpha = (a.astype(np.float32) * (1.0 - bg_norm)).clip(0, 255).astype(np.uint8)
+    arr[..., 3] = new_alpha
+    return Image.fromarray(arr, mode="RGBA")
+
+
 def make_frame_transparent(
     png_bytes: bytes,
     *,
@@ -164,6 +214,9 @@ def make_frame_transparent(
     white_key: bool = False,
     white_brightness: int = 252,
     white_saturation: float = 0.03,
+    bg_floodfill: bool = True,
+    bg_threshold: int = 240,
+    bg_feather_px: int = 4,
 ) -> bytes:
     """Post-process ramki: resize do portrait output + transparentne centrum +
     opcjonalny color-key bieli (Gemini zwraca RGB z bialym tlem wokol
@@ -224,6 +277,14 @@ def make_frame_transparent(
             log.warning("numpy not available - skipping white key")
         except Exception as e:  # noqa: BLE001
             log.warning("white key failed: %s", e)
+
+    # Flood-fill od rogow: usuwa bialo/jasne tlo connected z brzegiem,
+    # chroni rozane/srebrne detale wewnatrz kompozycji. Dziala po cutout
+    # centrum + feather, nie interferuje z alpha srodka.
+    if bg_floodfill:
+        img = _remove_bg_floodfill(
+            img, threshold=bg_threshold, feather_px=bg_feather_px,
+        )
 
     out = io.BytesIO()
     # optimize=True powoduje '_idat has no attribute fileno' z BytesIO na
