@@ -60,14 +60,20 @@ def _build_imagen_prompt(*, event_type: str, style: str, theme: str,
     return (
         f"Transparent PNG 1080x1920 portrait photo booth overlay for {event_type}. "
         f"Style: {style}. Theme: {theme or 'elegant'}. "
-        f"Decorative border at the edges (top, bottom, corners, sides) - "
-        f"LIGHT to MEDIUM thickness, ornaments occupy only 6-9%% of image "
-        f"width on each side. Keep it airy and delicate, not heavy or chunky. "
-        f"Center area 70%% width x 75%% height COMPLETELY EMPTY (video there). "
-        f"IMPORTANT: NO TEXT, NO WORDS, NO LETTERS, NO NAMES, NO DATES anywhere "
-        f"on the image - pure decorative ornaments only (flowers, swirls, "
-        f"geometric patterns). Delicate, refined ornaments - thinner rather "
-        f"than thicker. No inner frame lines crossing center."
+        f"ISOLATED decorative CLUSTERS at 4 corners (top-left, top-right, "
+        f"bottom-left, bottom-right) - each cluster occupies 15-20%% of image "
+        f"width. Corners can have small flowing tendrils toward middle of sides "
+        f"(thin, delicate). Center area 75%% width x 80%% height COMPLETELY "
+        f"EMPTY (transparent, video there). "
+        f"ABSOLUTELY CRITICAL:\n"
+        f"- NO rectangle outline/border/frame line around the image perimeter\n"
+        f"- NO horizontal bars/bands at top or bottom connecting corners\n"
+        f"- NO vertical bars/strips on left/right sides connecting corners\n"
+        f"- NO text, words, letters, names, dates anywhere\n"
+        f"- Edges of canvas: 100%% TRANSPARENT, no line, no shading\n"
+        f"- Decorations are ISOLATED at corners only, like 4 separate stickers\n"
+        f"- Rest of image: fully transparent (no background, no border, no hint)\n"
+        f"- Delicate airy ornaments, not heavy."
     )
 
 
@@ -93,20 +99,26 @@ def _refine_prompt_with_gemini(**kwargs: str) -> str:
                 # "no text" (AI image modele reaguja na obecnosc danych w
                 # promcie). Tekst na video dokleja Recorder przez FFmpeg
                 # drawtext - pisownia gwarantowana poprawna.
-                "CRITICAL requirements:\n"
+                "CRITICAL requirements (this is a PROFESSIONAL product, quality matters):\n"
                 "- Transparent PNG 1080x1920 PORTRAIT orientation (taller than wide)\n"
-                "- Decorative border on all 4 edges, LIGHT to MEDIUM thickness -\n"
-                "  occupies only 6-9%% of image width on each side. Delicate,\n"
-                "  airy, refined ornaments. NOT heavy, NOT chunky, NOT thick walls.\n"
-                "- Center area 70%% width x 75%% height must be COMPLETELY EMPTY\n"
-                "  (video will appear there - do not put anything in the middle)\n"
-                "- Decorations: ornate corners + flowing side borders + top/bottom bands\n"
-                "- *** ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO NAMES, NO DATES ***\n"
-                "  on the image. Text will be added separately by the video processor.\n"
-                "  The frame must be PURELY DECORATIVE - flowers, swirls, geometric\n"
-                "  patterns, borders. NOT A SINGLE CHARACTER anywhere.\n"
+                "- ISOLATED decorative CLUSTERS at 4 CORNERS only (top-left,\n"
+                "  top-right, bottom-left, bottom-right). Each cluster ~15-20%%\n"
+                "  of image width. Corners MAY have small delicate tendrils\n"
+                "  flowing toward the middle of sides, but thin and airy.\n"
+                "- Center area 75%% width x 80%% height must be COMPLETELY\n"
+                "  TRANSPARENT - video appears there, nothing in the middle.\n"
+                "- *** NO RECTANGLE BORDER/OUTLINE/FRAME LINE ALONG IMAGE EDGES ***\n"
+                "  Edges must be 100%% transparent. The 4 corner clusters are the\n"
+                "  ONLY decorations - rest of the image has absolutely nothing.\n"
+                "- *** NO HORIZONTAL BANDS at top or bottom connecting corners ***\n"
+                "- *** NO VERTICAL BARS on left/right connecting corners ***\n"
+                "- *** NO TEXT, NO WORDS, NO LETTERS, NO NAMES, NO DATES ***\n"
+                "  Not a single character anywhere. Text added separately later.\n"
+                "- Think: 4 separate sticker-like decorative clusters floating\n"
+                "  at corners on pure transparent canvas. No canvas border, no\n"
+                "  connecting bands, just 4 ornaments.\n"
                 f"- Style matches {kwargs['style']} aesthetic\n"
-                "- NO central ornaments crossing video area, NO inner rectangle frame lines\n"
+                "- Delicate, refined, airy - not heavy or chunky\n"
                 "- Output orientation: PORTRAIT / vertical (phone aspect 9:16)\n\n"
                 "Output ONLY the image generation prompt, no explanation, no markdown."
             ),
@@ -192,7 +204,11 @@ def _remove_bg_floodfill(
     if arr.ndim != 3 or arr.shape[2] != 4:
         return img
     r, g, b, a = arr[..., 0], arr[..., 1], arr[..., 2], arr[..., 3]
-    bright = (r >= threshold) & (g >= threshold) & (b >= threshold)
+    # Luminance-based threshold: lapie jasne kolory nie tylko biale.
+    # Jasny roz R=240 G=200 B=210 -> lum=214 (zlapany threshold=200).
+    # Klasyczna formula Rec. 601 (perceptual brightness).
+    lum = 0.299 * r.astype(np.float32) + 0.587 * g.astype(np.float32) + 0.114 * b.astype(np.float32)
+    bright = lum >= threshold
     labeled, _n = label(bright)
     # Flood-fill od CALYCH krawedzi + pixeli juz transparentnych (cutout
     # centrum zrobiony wczesniej w make_frame_transparent). Uzywamy obu
