@@ -31,6 +31,7 @@ class EventConfig {
     this.slowmoFactor,
     this.rotationDir,
     this.rotationSpeed,
+    this.stabilize,
   });
 
   final int eventId;
@@ -60,6 +61,10 @@ class EventConfig {
   final String? rotationDir; // 'cw' | 'ccw' | 'mixed'
   final int? rotationSpeed;
 
+  /// Czy wlaczyc post-process stabilizacji (FFmpeg deshake). Null = brak
+  /// nadpisania (Recorder uzywa ostatniej wartosci w SettingsStore).
+  final bool? stabilize;
+
   factory EventConfig.fromJson(Map<String, dynamic> j) => EventConfig(
         eventId: (j['event_id'] as num?)?.toInt() ?? 0,
         eventName: j['event_name']?.toString() ?? '',
@@ -76,6 +81,7 @@ class EventConfig {
         slowmoFactor: (j['slowmo_factor'] as num?)?.toDouble(),
         rotationDir: j['rotation_dir']?.toString(),
         rotationSpeed: (j['rotation_speed'] as num?)?.toInt(),
+        stabilize: j['stabilize'] is bool ? j['stabilize'] as bool : null,
       );
 
   EventConfig copyWith({String? overlayPath, String? musicPath}) => EventConfig(
@@ -94,6 +100,7 @@ class EventConfig {
         slowmoFactor: slowmoFactor,
         rotationDir: rotationDir,
         rotationSpeed: rotationSpeed,
+        stabilize: stabilize,
       );
 }
 
@@ -511,8 +518,12 @@ class StationClient extends ChangeNotifier {
           debugPrint('[StationClient] resolution z Station -> ${target.name}');
         }
       }
+      if (cfg.stabilize != null) {
+        await _store.saveStabilize(cfg.stabilize!);
+        debugPrint('[StationClient] stabilize z Station -> ${cfg.stabilize}');
+      }
       // TODO: saveVideoDuration / saveSlowmo / saveRotation jesli SettingsStore
-      // rozszerzymy. Na razie Recorder ma tylko resolution + mode w preferences.
+      // rozszerzymy. Na razie Recorder ma tylko resolution + mode + stabilize.
     } catch (e) {
       debugPrint('[StationClient] _applyRecordingParams error: $e');
     }

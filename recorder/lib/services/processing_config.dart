@@ -16,6 +16,7 @@ class ProcessingConfig {
     this.overlayPath,
     this.textTop,
     this.textBottom,
+    this.stabilize = false,
     required this.inputDuration,
   });
 
@@ -45,6 +46,10 @@ class ProcessingConfig {
   final String? overlayPath;
   final String? textTop;
   final String? textBottom;
+
+  /// Wlacz post-processing stabilizacji wideo (FFmpeg deshake 1-pass).
+  /// Sterowane przez Station Settings -> ustawienia per-event.
+  final bool stabilize;
 
   final Duration inputDuration;
 

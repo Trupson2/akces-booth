@@ -38,7 +38,12 @@ Future<void> main() async {
   unawaitedStart(server);
 
   final backend = BackendClient();
-  final eventManager = EventManager(backend: backend, server: server);
+  final settings = SettingsStore();
+  final eventManager = EventManager(
+    backend: backend,
+    server: server,
+    settings: settings,
+  );
   final pendingUploads = PendingUploadsService(backend: backend);
 
   final stateMachine = AppStateMachine(
@@ -48,10 +53,9 @@ Future<void> main() async {
     pendingUploads: pendingUploads,
   )..attachServer();
 
-  // PIN + lokalne preferencje Settings - ladujemy z diska przed runApp,
+  // PIN + SettingsStore (juz utworzony wyzej) - ladujemy przed runApp,
   // zeby router mogl od razu zdecydowac czy pokazac PinSetupScreen.
   final pin = PinService();
-  final settings = SettingsStore();
   await Future.wait([pin.load(), settings.load(), pendingUploads.load()]);
 
   // Event manager start (async - loads config, first sync, starts polling).

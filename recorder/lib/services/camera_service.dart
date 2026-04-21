@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -26,6 +27,8 @@ class CameraService extends ChangeNotifier {
   CameraService({SettingsStore? store}) : _store = store ?? SettingsStore();
 
   final SettingsStore _store;
+
+  static const _diagChannel = MethodChannel('akces_booth/camera_diag');
 
   CameraController? _controller;
   List<CameraDescription> _cameras = const [];
@@ -103,6 +106,11 @@ class CameraService extends ChangeNotifier {
       );
 
       await _createController(_mode, _resolution);
+      // Diagnostyka EIS - co tryb stabilizacji wspiera back camera
+      // (native HAL). Logujemy przy starcie - przyda sie do decyzji
+      // czy warto forkowac `camera_android_camerax` zeby wlaczyc
+      // PREVIEW_STABILIZATION (API 33+).
+      unawaited(_logStabilizationCapabilities());
       _set(CameraInitStatus.ready);
     } catch (e, st) {
       debugPrint('CameraService.initialize error: $e\n$st');
@@ -227,6 +235,19 @@ class CameraService extends ChangeNotifier {
 
   /// Otwiera ustawienia systemowe (gdy uprawnienia sa permanently denied).
   Future<bool> openSystemSettings() => openAppSettings();
+
+  /// Zapytaj native platform channel o wspierane tryby EIS/OIS back camery.
+  /// Tylko logowanie - Flutter camera plugin i tak sam decyduje co zastosuje.
+  Future<void> _logStabilizationCapabilities() async {
+    try {
+      final res = await _diagChannel.invokeMethod<Map<Object?, Object?>>(
+        'getBackCameraStabilization',
+      );
+      debugPrint('[CameraService] EIS/OIS caps: $res');
+    } catch (e) {
+      debugPrint('[CameraService] EIS caps query fail: $e');
+    }
+  }
 
   /// Rozpoczyna nagrywanie wideo do tymczasowego pliku.
   Future<void> startRecording() async {

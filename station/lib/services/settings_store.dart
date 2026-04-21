@@ -11,6 +11,7 @@ class SettingsStore extends ChangeNotifier {
   static const _kRotationDir = 'rec.rotation_dir'; // 'cw' | 'ccw' | 'mixed'
   static const _kRotationSpeed = 'rec.rotation_speed'; // 1..10
   static const _kResolution = 'rec.resolution'; // 'fullHd' | 'uhd4k'
+  static const _kStabilize = 'rec.stabilize';
   static const _kFbDefaultOn = 'ui.fb_default_on';
   static const _kFallbackMusic = 'rec.fallback_music'; // label
 
@@ -22,6 +23,7 @@ class SettingsStore extends ChangeNotifier {
   String _rotationDir = 'mixed';
   int _rotationSpeed = 7;
   String _resolution = 'fullHd';
+  bool _stabilize = false;
   bool _fbDefaultOn = false;
   String _fallbackMusic = 'Energetic Party';
 
@@ -33,6 +35,7 @@ class SettingsStore extends ChangeNotifier {
   String get rotationDir => _rotationDir;
   int get rotationSpeed => _rotationSpeed;
   String get resolution => _resolution;
+  bool get stabilize => _stabilize;
   bool get fbDefaultOn => _fbDefaultOn;
   String get fallbackMusic => _fallbackMusic;
 
@@ -43,6 +46,7 @@ class SettingsStore extends ChangeNotifier {
     _rotationDir = p.getString(_kRotationDir) ?? 'mixed';
     _rotationSpeed = p.getInt(_kRotationSpeed) ?? 7;
     _resolution = p.getString(_kResolution) ?? 'fullHd';
+    _stabilize = p.getBool(_kStabilize) ?? false;
     _fbDefaultOn = p.getBool(_kFbDefaultOn) ?? false;
     _fallbackMusic = p.getString(_kFallbackMusic) ?? 'Energetic Party';
     _loaded = true;
@@ -86,6 +90,13 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setStabilize(bool on) async {
+    _stabilize = on;
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kStabilize, on);
+    notifyListeners();
+  }
+
   Future<void> setFbDefault(bool on) async {
     _fbDefaultOn = on;
     final p = await SharedPreferences.getInstance();
@@ -107,6 +118,7 @@ class SettingsStore extends ChangeNotifier {
       'rotation_dir': _rotationDir,
       'rotation_speed': _rotationSpeed,
       'resolution': _resolution,
+      'stabilize': _stabilize,
     };
   }
 }

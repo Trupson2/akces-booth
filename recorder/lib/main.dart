@@ -4,9 +4,11 @@ import 'package:provider/provider.dart';
 
 import 'app.dart';
 import 'services/camera_service.dart';
+import 'services/mock_motor_controller.dart';
 import 'services/motor_controller.dart';
 import 'services/music_library.dart';
 import 'services/real_motor_controller.dart';
+import 'services/settings_store.dart';
 import 'services/station_client.dart';
 import 'services/video_processor.dart';
 
@@ -15,6 +17,11 @@ Future<void> main() async {
   await SystemChrome.setPreferredOrientations(const [
     DeviceOrientation.portraitUp,
   ]);
+
+  // Tryb demo - zapisany w SharedPreferences. Pozwala na prace bez fotobudki
+  // (MockMotorController loguje komendy do debug log zamiast BLE).
+  final store = SettingsStore();
+  final demoMode = await store.loadDemoMode();
 
   final stationClient = StationClient();
   // Fire-and-forget - jesli jest zapamietany IP, od razu probuje sie polaczyc.
@@ -28,7 +35,9 @@ Future<void> main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider<MotorController>(
-          create: (_) => RealMotorController(),
+          create: (_) => demoMode
+              ? MockMotorController()
+              : RealMotorController(),
         ),
         ChangeNotifierProvider<CameraService>(
           create: (_) => CameraService(),

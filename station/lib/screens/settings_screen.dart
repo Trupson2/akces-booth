@@ -479,6 +479,28 @@ class _RecordingParamsSection extends StatelessWidget {
           onMinus: () => settings.setVideoDuration(settings.videoDurationSec - 1),
           onPlus: () => settings.setVideoDuration(settings.videoDurationSec + 1),
         ),
+        _DropdownRow<String>(
+          label: 'Rozdzielczosc',
+          value: settings.resolution,
+          items: const [
+            ('fullHd', 'Full HD 1080p (szybko)'),
+            ('uhd4k', '4K (wolniej, premium)'),
+          ],
+          onChanged: (v) => settings.setResolution(v),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          value: settings.stabilize,
+          onChanged: (v) => settings.setStabilize(v),
+          activeThumbColor: AppTheme.primary,
+          title: const Text('Stabilizacja wideo (post-process)',
+              style: TextStyle(color: Colors.white, fontSize: 14)),
+          subtitle: const Text(
+            'FFmpeg deshake - kompensacja drgan motoru. +15-25% czasu renderu.',
+            style: TextStyle(color: AppTheme.muted, fontSize: 12),
+          ),
+        ),
         _DropdownRow<double>(
           label: 'Slow-motion',
           value: settings.slowMoFactor,

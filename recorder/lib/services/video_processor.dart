@@ -335,7 +335,15 @@ class VideoProcessor extends ChangeNotifier {
     _VideoDims videoDims = const _VideoDims(1080, 1920),
   }) {
     final parts = <String>[];
-    parts.add('[0:v]format=yuv420p,fps=30[v0]');
+    // Stabilizacja: FFmpeg deshake 1-pass przed resztą filtrów.
+    // rx/ry=24 = max shift 24px horizontal/vertical (solidna kompensacja
+    // dla drgań motoru fotobudki), edge=mirror zamiast czarnych brzegów.
+    // Uwaga: deshake zwiększa czas processingu o ~15-25%.
+    // vidstab byłby lepszy (2-pass) ale nie ma go w min-gpl build ffmpeg-kit.
+    final preV = config.stabilize
+        ? '[0:v]deshake=rx=24:ry=24:edge=mirror,format=yuv420p,fps=30[v0]'
+        : '[0:v]format=yuv420p,fps=30[v0]';
+    parts.add(preV);
 
     final actualSec = actualDuration.inMilliseconds / 1000.0;
     String currentLabel;

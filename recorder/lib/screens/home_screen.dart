@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/motor_state.dart';
+import '../services/mock_motor_controller.dart';
 import '../services/motor_controller.dart';
+import '../services/settings_store.dart';
 import '../services/station_client.dart';
 import '../theme/app_theme.dart';
 import '../widgets/big_button.dart';
@@ -82,28 +85,35 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final motor = context.watch<MotorController>();
+    final isDemo = motor is MockMotorController;
     return Row(
       children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppTheme.primary, AppTheme.accent],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+        GestureDetector(
+          onLongPress: () => _openDemoDialog(context, isDemo: isDemo),
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isDemo
+                    ? const [Colors.orange, Colors.deepOrange]
+                    : const [AppTheme.primary, AppTheme.accent],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
             ),
-            borderRadius: BorderRadius.circular(12),
+            child: const Icon(Icons.camera_rounded,
+                color: Colors.white, size: 22),
           ),
-          child: const Icon(Icons.camera_rounded, color: Colors.white, size: 22),
         ),
         const SizedBox(width: 12),
-        const Expanded(
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
+              const Text(
                 'Akces Booth Recorder',
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -113,9 +123,15 @@ class _TopBar extends StatelessWidget {
                 ),
               ),
               Text(
-                'Sesja 7 - BLE 360 Controller',
+                isDemo
+                    ? 'TRYB DEMO - bez fotobudki'
+                    : 'Fotobudka 360 - motor BLE',
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: AppTheme.muted, fontSize: 11),
+                style: TextStyle(
+                  color: isDemo ? Colors.orangeAccent : AppTheme.muted,
+                  fontSize: 11,
+                  fontWeight: isDemo ? FontWeight.w700 : FontWeight.w400,
+                ),
               ),
             ],
           ),
@@ -130,6 +146,63 @@ class _TopBar extends StatelessWidget {
         const SizedBox(width: 10),
         const Icon(Icons.tablet_rounded, color: AppTheme.muted, size: 22),
       ],
+    );
+  }
+
+  Future<void> _openDemoDialog(BuildContext context,
+      {required bool isDemo}) async {
+    HapticFeedback.mediumImpact();
+    final want = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: Text(
+          isDemo ? 'Wylaczyc tryb demo?' : 'Wlaczyc tryb demo?',
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          isDemo
+              ? 'Recorder wroci do prawdziwej fotobudki (BLE). Wymaga restartu apki.'
+              : 'Recorder bedzie dzialal bez fotobudki - wszystkie komendy motor '
+                'logowane do debug log zamiast BLE. Przydatne do testow bez sprzetu.\n\n'
+                'Wymaga restartu apki.',
+          style: const TextStyle(color: AppTheme.muted, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dCtx).pop(false),
+            child: const Text('Anuluj', style: TextStyle(color: AppTheme.muted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dCtx).pop(true),
+            child: Text(
+              isDemo ? 'Wylacz demo' : 'Wlacz demo',
+              style: const TextStyle(color: AppTheme.primary),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (want != true || !context.mounted) return;
+    await SettingsStore().saveDemoMode(!isDemo);
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: const Text('Zrestartuj apke',
+            style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'Zamknij i otworz apke zeby zmiana sie zastosowala.',
+          style: TextStyle(color: AppTheme.muted, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dCtx).pop(),
+            child: const Text('OK', style: TextStyle(color: AppTheme.primary)),
+          ),
+        ],
+      ),
     );
   }
 }

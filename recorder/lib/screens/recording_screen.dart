@@ -252,6 +252,7 @@ class _RecordingScreenState extends State<RecordingScreen>
         overlayPath: eventCfg?.overlayPath,
         textTop: eventCfg?.textTop,
         textBottom: eventCfg?.textBottom,
+        stabilize: eventCfg?.stabilize ?? false,
         inputDuration: config.inputDuration,
       );
       debugPrint('[RecordingScreen] Random effect: ${params.debugSignature} '
