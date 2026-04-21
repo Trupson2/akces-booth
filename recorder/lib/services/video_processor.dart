@@ -426,10 +426,24 @@ class VideoProcessor extends ChangeNotifier {
     // dla drgań motoru fotobudki), edge=mirror zamiast czarnych brzegów.
     // Uwaga: deshake zwiększa czas processingu o ~15-25%.
     // vidstab byłby lepszy (2-pass) ale nie ma go w min-gpl build ffmpeg-kit.
+    //
+    // Orientacja: jesli stored video jest landscape (w > h) i nie ma
+    // rotation metadata (probe nie wykryl) - FORCE transpose=1 (90 CW)
+    // zeby wyjsc portrait. User chce portrait output zawsze (fotobudka 360
+    // ustawiona do nagrywania pionowego).
+    final needsTranspose = videoDims.width > videoDims.height;
+    final transposeFilter = needsTranspose ? 'transpose=1,' : '';
     final preV = config.stabilize
-        ? '[0:v]deshake=rx=24:ry=24:edge=mirror,format=yuv420p,fps=30[v0]'
-        : '[0:v]format=yuv420p,fps=30[v0]';
+        ? '[0:v]${transposeFilter}deshake=rx=24:ry=24:edge=mirror,'
+            'format=yuv420p,fps=30[v0]'
+        : '[0:v]${transposeFilter}format=yuv420p,fps=30[v0]';
     parts.add(preV);
+
+    // Po transpose wymiary sie swapuja - dla overlay + drawtext uzywamy
+    // finalDims (post-rotation).
+    final finalDims = needsTranspose
+        ? _VideoDims(videoDims.height, videoDims.width)
+        : videoDims;
 
     final actualSec = actualDuration.inMilliseconds / 1000.0;
     String currentLabel;
@@ -457,8 +471,8 @@ class VideoProcessor extends ChangeNotifier {
     if (hasOverlay) {
       // Input indices: 0=video, 1=music (jesli jest), 2=overlay (lub 1 gdy brak music).
       final ovIdx = (config.musicPath != null) ? 2 : 1;
-      final w = videoDims.width;
-      final h = videoDims.height;
+      final w = finalDims.width;
+      final h = finalDims.height;
       parts.add('[$ovIdx:v]format=rgba,scale=$w:$h[ovfit]');
       parts.add('$currentLabel[ovfit]overlay=0:0[ov]');
       currentLabel = '[ov]';
