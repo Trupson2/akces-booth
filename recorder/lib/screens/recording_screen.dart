@@ -413,6 +413,12 @@ class _RecordingScreenState extends State<RecordingScreen>
             final textBottom = cfg?.textBottom?.trim();
             final hasTextTop = textTop != null && textTop.isNotEmpty;
             final hasTextBottom = textBottom != null && textBottom.isNotEmpty;
+            // Sensor kamery OP13 jest landscape (aspect ~1.777). W portrait
+            // orientation chcemy pokazac preview WYPELNIAJACE ekran bez
+            // stretchingu - FittedBox cover obcina boki landscape streama
+            // zeby pasowal do portrait viewport. Tak operator widzi to co
+            // faktycznie znajdzie sie w finalnym portrait MP4 (po transpose).
+            final sensorAspect = ctrl.value.aspectRatio;
             // Styl tekstu symuluje finalny drawtext FFmpeg: bialy bold +
             // pol-przezroczyste czarne tlo + cien. Fontsize 18sp ~
             // h*0.032 po scale do preview AspectRatio.
@@ -439,11 +445,24 @@ class _RecordingScreenState extends State<RecordingScreen>
                 );
             return Center(
               child: AspectRatio(
-                aspectRatio: 1 / ctrl.value.aspectRatio,
+                aspectRatio: 1 / sensorAspect,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    CameraPreview(ctrl),
+                    // CameraPreview w FittedBox cover - wypelnia portrait
+                    // viewport (1080x1920), boki landscape streama (1920x1080)
+                    // obciete zeby pasowaly do portrait aspect bez stretchingu.
+                    // SizedBox wewnatrz ma sensor dims, FittedBox skaluje+kropuje.
+                    ClipRect(
+                      child: FittedBox(
+                        fit: BoxFit.cover,
+                        child: SizedBox(
+                          width: sensorAspect * 1000,
+                          height: 1000,
+                          child: CameraPreview(ctrl),
+                        ),
+                      ),
+                    ),
                     if (hasOverlay)
                       IgnorePointer(
                         child: Image.file(
