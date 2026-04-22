@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -308,12 +311,7 @@ class _StatusColumn extends StatelessWidget {
           color: motor.isConnected ? AppTheme.success : AppTheme.muted,
         ),
         const SizedBox(height: 8),
-        const StatusIndicator(
-          icon: Icons.battery_4_bar_rounded,
-          label: 'BATERIA',
-          value: '67%',
-          color: AppTheme.success,
-        ),
+        const _BatteryIndicator(),
         const SizedBox(height: 8),
         InkWell(
           onTap: () => Navigator.of(context).push(
@@ -476,6 +474,86 @@ class _SpeedDisplay extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Pokazuje aktualny % baterii - battery_plus, odswieza co 30s i na
+/// zmiany stanu (charging/discharging). Ikonka adaptuje sie do level.
+class _BatteryIndicator extends StatefulWidget {
+  const _BatteryIndicator();
+
+  @override
+  State<_BatteryIndicator> createState() => _BatteryIndicatorState();
+}
+
+class _BatteryIndicatorState extends State<_BatteryIndicator> {
+  final Battery _battery = Battery();
+  int? _level;
+  BatteryState _state = BatteryState.unknown;
+  Timer? _timer;
+  StreamSubscription<BatteryState>? _stateSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) => _refresh());
+    // BatteryState changes - trigger natychmiastowy refresh po wpieciu
+    // ladowarki / odepnieciu (zeby kolor i ikona sie odswiezyly od razu).
+    _stateSub = _battery.onBatteryStateChanged.listen((s) {
+      if (!mounted) return;
+      setState(() => _state = s);
+      _refresh();
+    });
+  }
+
+  Future<void> _refresh() async {
+    try {
+      final lvl = await _battery.batteryLevel;
+      if (!mounted) return;
+      setState(() => _level = lvl.clamp(0, 100));
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _stateSub?.cancel();
+    super.dispose();
+  }
+
+  IconData get _icon {
+    final l = _level ?? 0;
+    if (_state == BatteryState.charging) return Icons.battery_charging_full_rounded;
+    if (l >= 90) return Icons.battery_full_rounded;
+    if (l >= 75) return Icons.battery_6_bar_rounded;
+    if (l >= 50) return Icons.battery_4_bar_rounded;
+    if (l >= 30) return Icons.battery_3_bar_rounded;
+    if (l >= 15) return Icons.battery_2_bar_rounded;
+    return Icons.battery_alert_rounded;
+  }
+
+  Color get _color {
+    final l = _level ?? 100;
+    if (_state == BatteryState.charging) return AppTheme.success;
+    if (l >= 30) return AppTheme.success;
+    if (l >= 15) return Colors.orange;
+    return AppTheme.error;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = _level == null
+        ? '...'
+        : (_state == BatteryState.charging
+            ? '$_level% (ladowanie)'
+            : '$_level%');
+    return StatusIndicator(
+      icon: _icon,
+      label: 'BATERIA',
+      value: value,
+      color: _color,
     );
   }
 }

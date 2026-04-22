@@ -29,6 +29,8 @@ dependencies:
   dio: ^5.4.0
   # SHA-256 do hashowania PIN-u w Settings
   crypto: ^3.0.3
+  # Bateria tableta (wyswietlana w Settings + debug panel)
+  battery_plus: ^6.2.0
 
 dev_dependencies:
   flutter_test:

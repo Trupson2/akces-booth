@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -769,6 +772,7 @@ class _StatsSection extends StatelessWidget {
       title: '📊 DZISIEJSZE STATYSTYKI',
       children: [
         _Row('Nagrano filmow', '$videos'),
+        _StationBatteryRow(),
         _Row('Bateria OnePlus',
             recorderBattery != null ? '$recorderBattery%' : '-'),
         _Row('Wolny dysk',
@@ -779,6 +783,54 @@ class _StatsSection extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// Bateria samego Stationa (tableta/S21) - battery_plus, refresh co 30s.
+class _StationBatteryRow extends StatefulWidget {
+  @override
+  State<_StationBatteryRow> createState() => _StationBatteryRowState();
+}
+
+class _StationBatteryRowState extends State<_StationBatteryRow> {
+  final Battery _battery = Battery();
+  int? _level;
+  BatteryState _state = BatteryState.unknown;
+  Timer? _timer;
+  StreamSubscription<BatteryState>? _stateSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) => _refresh());
+    _stateSub = _battery.onBatteryStateChanged.listen((s) {
+      if (!mounted) return;
+      setState(() => _state = s);
+      _refresh();
+    });
+  }
+
+  Future<void> _refresh() async {
+    try {
+      final lvl = await _battery.batteryLevel;
+      if (!mounted) return;
+      setState(() => _level = lvl.clamp(0, 100));
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _stateSub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_level == null) return _Row('Bateria Station', '...');
+    final charging = _state == BatteryState.charging ? ' (ladowanie)' : '';
+    return _Row('Bateria Station', '$_level%$charging');
   }
 }
 

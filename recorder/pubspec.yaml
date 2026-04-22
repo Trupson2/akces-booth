@@ -25,6 +25,8 @@ dependencies:
   flutter_blue_plus: ^1.32.0
   # FFmpeg post-processing (boomerang + slow-mo)
   ffmpeg_kit_flutter_new: ^4.1.0
+  # Status baterii Recordera wysylany do Stationa (debug panel + settings).
+  battery_plus: ^6.2.0
 
 dev_dependencies:
   flutter_test:

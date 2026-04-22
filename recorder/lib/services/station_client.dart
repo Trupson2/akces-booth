@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:battery_plus/battery_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
@@ -287,9 +288,22 @@ class StationClient extends ChangeNotifier {
     }
   }
 
-  /// Placeholder - battery_plus package moze to dostarczyc pozniej.
-  /// Na razie zwraca null (Station wyswietli "-").
-  Future<int?> _probeBatteryPct() async => _lastBatteryPct;
+  /// Lazy singleton Battery (battery_plus). Nie re-tworzymy przy kazdym
+  /// _pushStatus bo to platform channel instance.
+  final Battery _battery = Battery();
+
+  /// Procent baterii 0-100 z BatteryManager Androida. Fallback do
+  /// ostatniej znanej wartosci (_lastBatteryPct) gdy platform channel
+  /// zawiedzie - Station widzi "-" tylko gdy nigdy nie dostal danych.
+  Future<int?> _probeBatteryPct() async {
+    try {
+      final lvl = await _battery.batteryLevel;
+      return lvl.clamp(0, 100);
+    } catch (e) {
+      debugPrint('[StationClient] battery probe fail: $e');
+      return _lastBatteryPct;
+    }
+  }
 
   /// Probe wolnego miejsca na docs directory. Fallback do null.
   Future<double?> _probeDiskFreeGb() async {
