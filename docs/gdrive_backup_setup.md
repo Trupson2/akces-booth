@@ -27,7 +27,7 @@ rclone config
 Wybierz opcje po kolei:
 
 - `n` → **New remote**
-- Nazwa: **`gdrive`** (musi być dokładnie ta nazwa, bo skrypt tego używa)
+- Nazwa: **`booth-cloud`** (musi być dokładnie ta nazwa, bo skrypt tego używa — `akces-cloud` jest zarezerwowane dla akces-hub ENTERPRISE)
 - Storage: wpisz **`drive`** (Google Drive)
 - `client_id` — zostaw puste (Enter, użyje domyślnego rclone)
 - `client_secret` — zostaw puste (Enter)
@@ -48,10 +48,10 @@ Wybierz opcje po kolei:
 
 ```bash
 rclone listremotes
-# Powinno pokazać: gdrive:
+# Powinno pokazać: booth-cloud:
 
-rclone mkdir gdrive:AkcesBoothBackup
-rclone ls gdrive:AkcesBoothBackup
+rclone mkdir booth-cloud:AkcesBoothBackup
+rclone ls booth-cloud:AkcesBoothBackup
 # Puste, ale bez błędu = działa
 ```
 
@@ -110,6 +110,6 @@ Manual trigger:
 
 Status rclone:
 ```bash
-rclone config show gdrive
-rclone about gdrive:    # pokaze uzyte/wolne miejsce na Drive
+rclone config show booth-cloud
+rclone about booth-cloud:    # pokaze uzyte/wolne miejsce na Drive
 ```

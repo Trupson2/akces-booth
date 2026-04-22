@@ -61,12 +61,12 @@ def dashboard():  # type: ignore[no-untyped-def]
     except Exception as e:
         sysinfo["last_backup"] = f"blad: {e}"
     try:
-        # Sprawdz czy rclone remote 'gdrive' jest skonfigurowany.
+        # Sprawdz czy rclone remote 'booth-cloud' jest skonfigurowany.
         res = subprocess.run(
             ["rclone", "listremotes"],
             capture_output=True, text=True, timeout=3,
         )
-        sysinfo["rclone_configured"] = "tak" if "gdrive:" in res.stdout else "nie (setup pending)"
+        sysinfo["rclone_configured"] = "tak" if "booth-cloud:" in res.stdout else "nie (setup pending)"
     except Exception:
         sysinfo["rclone_configured"] = "rclone niezainstalowany"
     # Total videos w DB (wszystkie eventy)
