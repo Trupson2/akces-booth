@@ -55,6 +55,37 @@
   </div>
 </div>
 
+{% if sysinfo %}
+  <div class="grid md:grid-cols-4 gap-4 mb-8">
+    <div class="bg-slate-800 rounded-xl p-4">
+      <div class="text-xs uppercase text-slate-400 tracking-wider">Dysk Pi</div>
+      {% if sysinfo.disk_free_gb %}
+        <div class="text-lg font-bold mt-1">{{ sysinfo.disk_free_gb }} GB <span class="text-sm text-slate-400 font-normal">wolne</span></div>
+        <div class="text-xs text-slate-500">z {{ sysinfo.disk_total_gb }} GB · {{ sysinfo.disk_used_pct }}% uzyte</div>
+      {% else %}
+        <div class="text-slate-500 mt-1 text-sm">-</div>
+      {% endif %}
+    </div>
+    <div class="bg-slate-800 rounded-xl p-4">
+      <div class="text-xs uppercase text-slate-400 tracking-wider">Uptime Pi</div>
+      <div class="text-lg font-bold mt-1">{{ sysinfo.uptime or '-' }}</div>
+    </div>
+    <div class="bg-slate-800 rounded-xl p-4">
+      <div class="text-xs uppercase text-slate-400 tracking-wider">Filmy (total)</div>
+      <div class="text-lg font-bold mt-1 text-indigo-300">{{ sysinfo.total_videos or '-' }}</div>
+    </div>
+    <div class="bg-slate-800 rounded-xl p-4">
+      <div class="text-xs uppercase text-slate-400 tracking-wider">Google Drive</div>
+      <div class="text-sm mt-1 {% if sysinfo.rclone_configured == 'tak' %}text-emerald-400{% else %}text-amber-400{% endif %}">
+        {{ sysinfo.rclone_configured }}
+      </div>
+      {% if sysinfo.last_backup %}
+        <div class="text-xs text-slate-500 mt-1 truncate" title="{{ sysinfo.last_backup }}">{{ sysinfo.last_backup[:50] }}</div>
+      {% endif %}
+    </div>
+  </div>
+{% endif %}
+
 {% if active_event %}
   <div class="bg-slate-800 rounded-xl p-5">
     <h2 class="font-bold mb-3">Info dla apki Station</h2>

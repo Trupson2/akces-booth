@@ -15,17 +15,75 @@ admin_bp = Blueprint("admin", __name__, template_folder="../templates")
 @admin_bp.route("/", methods=["GET"])
 @require_admin
 def dashboard():  # type: ignore[no-untyped-def]
+    import os
+    import shutil
+    import subprocess
     active = models.get_active_event(Config.DB_PATH)
     videos = (
         models.list_videos_for_event(Config.DB_PATH, active["id"])
         if active else []
     )
     stats = models.daily_stats(Config.DB_PATH)
+
+    # Stats systemowe - disk, uptime, backup status.
+    sysinfo: dict[str, str | None] = {}
+    try:
+        du = shutil.disk_usage(Config.BASE_DIR)
+        sysinfo["disk_free_gb"] = f"{du.free / 1024 / 1024 / 1024:.1f}"
+        sysinfo["disk_total_gb"] = f"{du.total / 1024 / 1024 / 1024:.1f}"
+        sysinfo["disk_used_pct"] = f"{(du.total - du.free) * 100 // du.total}"
+    except Exception:
+        sysinfo["disk_free_gb"] = None
+    try:
+        with open("/proc/uptime") as f:
+            up = float(f.read().split()[0])
+            days = int(up // 86400)
+            hours = int((up % 86400) // 3600)
+            mins = int((up % 3600) // 60)
+            sysinfo["uptime"] = f"{days}d {hours}h {mins}m"
+    except Exception:
+        sysinfo["uptime"] = None
+    try:
+        # Ostatnia linia z backup log - "BACKUP OK" lub "BACKUP START"
+        log_path = "/var/log/akces-booth-backup.log"
+        if os.path.exists(log_path):
+            res = subprocess.run(
+                ["tail", "-n", "20", log_path],
+                capture_output=True, text=True, timeout=2,
+            )
+            lines = [ln for ln in res.stdout.splitlines() if "===" in ln]
+            if lines:
+                sysinfo["last_backup"] = lines[-1].strip()
+            else:
+                sysinfo["last_backup"] = "brak wpisow"
+        else:
+            sysinfo["last_backup"] = "log nie istnieje (rclone nie skonfigurowany?)"
+    except Exception as e:
+        sysinfo["last_backup"] = f"blad: {e}"
+    try:
+        # Sprawdz czy rclone remote 'gdrive' jest skonfigurowany.
+        res = subprocess.run(
+            ["rclone", "listremotes"],
+            capture_output=True, text=True, timeout=3,
+        )
+        sysinfo["rclone_configured"] = "tak" if "gdrive:" in res.stdout else "nie (setup pending)"
+    except Exception:
+        sysinfo["rclone_configured"] = "rclone niezainstalowany"
+    # Total videos w DB (wszystkie eventy)
+    try:
+        import sqlite3
+        with sqlite3.connect(str(Config.DB_PATH)) as conn:
+            row = conn.execute("SELECT COUNT(*) FROM videos").fetchone()
+            sysinfo["total_videos"] = str(row[0]) if row else "0"
+    except Exception:
+        sysinfo["total_videos"] = None
+
     return render_template(
         "admin/dashboard.html",
         active_event=active,
         video_count=len(videos),
         stats=stats,
+        sysinfo=sysinfo,
         public_base=Config.PUBLIC_BASE_URL,
     )
 
