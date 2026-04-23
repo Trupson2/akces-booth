@@ -241,12 +241,18 @@ class _RecordingScreenState extends State<RecordingScreen>
         ...musicLib.availablePaths,
       ];
 
-      // Fotobudka 360 placi sie za efekt boomerangu (spin+cofanie). Filtrujemy
-      // templates BEZ cofania - slowCinematic i fastSlowFast - zeby klient
-      // zawsze dostal cofanie. Dwa warianty dla wizualnej roznorodnosci.
+      // Zmiana strategii (2026-04-23): templates BEZ reverse.
+      // Poprzednio: classicBoomerang + freezeReverse (oba robia reverse =
+      // "chodzi w tyl" co wyglada dziwnie gdy tancerka schodzi z platformy
+      // w srodku nagrania). User: "efekt potem wraca tak nie powinno byc".
+      //
+      // Teraz: fastSlowFast (3 segmenty - szybki start + normal + slow-mo
+      // finale) + slowCinematic (whole slow-mo). Oba jednokierunkowe,
+      // naturalne dla nagrania dynamicznego. Slow-mo na koncu = dramatyczna
+      // "klatka" na muzyce.
       const spinTemplates = <EffectTemplate>[
-        EffectTemplate.classicBoomerang,
-        EffectTemplate.freezeReverse,
+        EffectTemplate.fastSlowFast,
+        EffectTemplate.slowCinematic,
       ];
       final params = picker.pick(
         musicPool: musicPool,
