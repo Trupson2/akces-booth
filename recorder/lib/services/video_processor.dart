@@ -411,8 +411,10 @@ class VideoProcessor extends ChangeNotifier {
     args.addAll([
       '-c:v', 'libx264',
       '-preset', 'ultrafast',
-      '-crf', '28', // bylo 23, teraz 28 = mniejszy plik, szybszy encode
-      '-tune', 'fastdecode', // optymalizuj dla szybkiego decode (mobile player)
+      '-crf', '28',
+      // USUNIETE -tune fastdecode: paradoksalnie spowalnialo encoding
+      // w tym ffmpeg-kit buildzie (obserwacja z logow speed=0.02x).
+      '-threads', '0', // auto = wszystkie rdzenie SD8 Elite (8)
       '-pix_fmt', 'yuv420p',
       '-movflags', '+faststart',
       outputPath,
@@ -455,13 +457,13 @@ class VideoProcessor extends ChangeNotifier {
     if (needsTranspose) {
       parts.add('[0:v]transpose=1[v_rot]');
       final mid = config.stabilize
-          ? '[v_rot]deshake=rx=32:ry=32:edge=mirror,'
+          ? '[v_rot]deshake=rx=16:ry=16:edge=mirror,'
               'scale=$targetW:$targetH,format=yuv420p,fps=30[v0]'
           : '[v_rot]scale=$targetW:$targetH,format=yuv420p,fps=30[v0]';
       parts.add(mid);
     } else {
       final preV = config.stabilize
-          ? '[0:v]deshake=rx=32:ry=32:edge=mirror,'
+          ? '[0:v]deshake=rx=16:ry=16:edge=mirror,'
               'scale=$targetW:$targetH,format=yuv420p,fps=30[v0]'
           : '[0:v]scale=$targetW:$targetH,format=yuv420p,fps=30[v0]';
       parts.add(preV);
