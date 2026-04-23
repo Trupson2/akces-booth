@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'app.dart';
 import 'services/app_state_machine.dart';
@@ -28,6 +29,9 @@ Future<void> main() async {
   await SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.immersiveSticky,
   );
+  // Ekran zawsze aktywny - Tab nie moze isc spac podczas eventu, inaczej
+  // goscie nie moga kliknac START i QR nie wyswietla sie po nagraniu.
+  await WakelockPlus.enable();
 
   // Logger najpierw - pozostale serwisy zapisza wszystko od startu.
   await Log.init();

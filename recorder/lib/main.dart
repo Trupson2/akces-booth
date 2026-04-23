@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'app.dart';
 import 'services/camera_service.dart';
@@ -17,6 +18,10 @@ Future<void> main() async {
   await SystemChrome.setPreferredOrientations(const [
     DeviceOrientation.portraitUp,
   ]);
+  // Ekran zawsze aktywny - fotobudka OnePlus nie moze sie zgasic podczas
+  // eventu, bo wtedy kamera tez traci session i Recorder pada.
+  // Wakelock trzyma display + CPU aktywnie caly czas dzialania apki.
+  await WakelockPlus.enable();
 
   // Tryb demo - zapisany w SharedPreferences. Pozwala na prace bez fotobudki
   // (MockMotorController loguje komendy do debug log zamiast BLE).
