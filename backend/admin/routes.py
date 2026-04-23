@@ -17,7 +17,7 @@ admin_bp = Blueprint("admin", __name__, template_folder="../templates")
 def dashboard():  # type: ignore[no-untyped-def]
     import os
     import shutil
-    import subprocess
+    from pathlib import Path
     active = models.get_active_event(Config.DB_PATH)
     videos = (
         models.list_videos_for_event(Config.DB_PATH, active["id"])
@@ -44,16 +44,18 @@ def dashboard():  # type: ignore[no-untyped-def]
     except Exception:
         sysinfo["uptime"] = None
     try:
-        # Ostatnia linia z backup log - "BACKUP OK" lub "BACKUP START"
+        # Ostatnia linia z backup log - "BACKUP OK" lub "BACKUP START".
+        # Native Python read - nie polegamy na `tail` w PATH (systemd
+        # gunicorn PATH jest ograniczony, nie ma /usr/bin).
         log_path = "/var/log/akces-booth-backup.log"
         if os.path.exists(log_path):
-            res = subprocess.run(
-                ["tail", "-n", "20", log_path],
-                capture_output=True, text=True, timeout=2,
-            )
-            lines = [ln for ln in res.stdout.splitlines() if "===" in ln]
-            if lines:
-                sysinfo["last_backup"] = lines[-1].strip()
+            with open(log_path, encoding="utf-8", errors="replace") as f:
+                # Tail ostatnich ~20 linii (file size <100KB typowo)
+                all_lines = f.readlines()
+                tail_lines = all_lines[-20:] if len(all_lines) > 20 else all_lines
+            marker_lines = [ln for ln in tail_lines if "===" in ln]
+            if marker_lines:
+                sysinfo["last_backup"] = marker_lines[-1].strip()
             else:
                 sysinfo["last_backup"] = "brak wpisow"
         else:
@@ -61,14 +63,20 @@ def dashboard():  # type: ignore[no-untyped-def]
     except Exception as e:
         sysinfo["last_backup"] = f"blad: {e}"
     try:
-        # Sprawdz czy rclone remote 'booth-cloud' jest skonfigurowany.
-        res = subprocess.run(
-            ["rclone", "listremotes"],
-            capture_output=True, text=True, timeout=3,
-        )
-        sysinfo["rclone_configured"] = "tak" if "booth-cloud:" in res.stdout else "nie (setup pending)"
-    except Exception:
-        sysinfo["rclone_configured"] = "rclone niezainstalowany"
+        # Sprawdz czy rclone config ma remote 'booth-cloud'.
+        # Native read ~/.config/rclone/rclone.conf - nie subprocess.
+        # (Systemd PATH moze nie zawierac /usr/bin, wtedy subprocess.run
+        # padalby z FileNotFoundError mimo ze rclone jest zainstalowany.)
+        rclone_conf = Path.home() / ".config/rclone/rclone.conf"
+        if rclone_conf.exists():
+            text = rclone_conf.read_text(encoding="utf-8", errors="replace")
+            sysinfo["rclone_configured"] = (
+                "tak" if "[booth-cloud]" in text else "nie (setup pending)"
+            )
+        else:
+            sysinfo["rclone_configured"] = "nie (brak rclone.conf)"
+    except Exception as e:
+        sysinfo["rclone_configured"] = f"blad: {e}"
     # Total videos w DB (wszystkie eventy)
     try:
         import sqlite3
