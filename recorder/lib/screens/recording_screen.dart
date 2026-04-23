@@ -241,18 +241,16 @@ class _RecordingScreenState extends State<RecordingScreen>
         ...musicLib.availablePaths,
       ];
 
-      // Zmiana strategii (2026-04-23): templates BEZ reverse.
-      // Poprzednio: classicBoomerang + freezeReverse (oba robia reverse =
-      // "chodzi w tyl" co wyglada dziwnie gdy tancerka schodzi z platformy
-      // w srodku nagrania). User: "efekt potem wraca tak nie powinno byc".
-      //
-      // Teraz: fastSlowFast (3 segmenty - szybki start + normal + slow-mo
-      // finale) + slowCinematic (whole slow-mo). Oba jednokierunkowe,
-      // naturalne dla nagrania dynamicznego. Slow-mo na koncu = dramatyczna
-      // "klatka" na muzyce.
+      // Tylko fastSlowFast (2026-04-23 feedback):
+      // - classicBoomerang / freezeReverse WYJEBANE: robily reverse =
+      //   "chodzi w tyl" gdy tancerka schodzi, dziwny efekt.
+      // - slowCinematic WYJEBANE: slowmo na CALYM filmiku - user: "efekt
+      //   spowalnienia jest na caly filmik".
+      // - fastSlowFast: 3 segmenty - szybki intro + normal + slowmo finale.
+      //   Slow-mo TYLKO na ostatnich 30% = "dramatyczna klatka" zamiast
+      //   ciagnacego sie slow-mo. Single template = predictable output.
       const spinTemplates = <EffectTemplate>[
         EffectTemplate.fastSlowFast,
-        EffectTemplate.slowCinematic,
       ];
       final params = picker.pick(
         musicPool: musicPool,

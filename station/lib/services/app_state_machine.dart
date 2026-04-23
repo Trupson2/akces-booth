@@ -363,14 +363,30 @@ class AppStateMachine extends ChangeNotifier {
       );
     });
 
-    final result = await be.uploadVideo(
-      videoPath: job.localFilePath!,
-      publishToFacebook: job.publishToFacebook,
-      onProgress: (p) {
-        _progress = p;
-        notifyListeners();
-      },
-    );
+    // Retry 3x przed fallback na local - transientne DNS/network issues
+    // (Failed host lookup, temporary unreachable) rozwiazuja sie zwykle
+    // w <15s. Bez retry klient dostawal local URL po pierwszym DNS fail,
+    // a upload przechodzil pozniej przez PendingUploads (klient tego nie
+    // zobaczyl bo juz zeskanowal lokalny QR).
+    BackendUploadResult? result;
+    const maxAttempts = 3;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      result = await be.uploadVideo(
+        videoPath: job.localFilePath!,
+        publishToFacebook: job.publishToFacebook,
+        onProgress: (p) {
+          _progress = p;
+          notifyListeners();
+        },
+      );
+      if (result != null) break;
+      if (attempt < maxAttempts) {
+        Log.w('StateMachine',
+            'upload attempt $attempt/$maxAttempts fail, retry za 4s');
+        await Future<void>.delayed(const Duration(seconds: 4));
+        if (_state == AppState.error) return; // timeout w miedzyczasie
+      }
+    }
 
     _timeoutGuard?.cancel();
     _timeoutGuard = null;
@@ -379,7 +395,8 @@ class AppStateMachine extends ChangeNotifier {
     if (_state == AppState.error) return;
 
     if (result == null) {
-      Log.w('StateMachine', 'upload returned null - offline fallback');
+      Log.w('StateMachine',
+          'upload returned null po $maxAttempts probach - offline fallback');
       await _fallbackToLocalServe(job);
       return;
     }
