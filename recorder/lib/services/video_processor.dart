@@ -404,13 +404,15 @@ class VideoProcessor extends ChangeNotifier {
       args.add('-an');
     }
 
-    // Encoding: h264_mediacodec (HW encoder Androida - 5-10x szybszy od
-    // libx264 software). ffmpeg-kit-flutter-new wspiera mediacodec jesli
-    // build zawiera enable-mediacodec (default w recent build'ach).
-    // bitrate 8M dla FullHD portrait 30fps = dobra jakosc.
+    // Encoding: libx264 ultrafast. Proba z h264_mediacodec zawiodla
+    // (speed=0.006x w tym ffmpeg-kit buildzie - prawdopodobnie brak
+    // mediacodec encoder albo blad parseowania pix_fmt). Wracamy do
+    // libx264 ultrafast CRF 28 (lzejszy quality dla szybszego encodingu).
     args.addAll([
-      '-c:v', 'h264_mediacodec',
-      '-b:v', '8M',
+      '-c:v', 'libx264',
+      '-preset', 'ultrafast',
+      '-crf', '28', // bylo 23, teraz 28 = mniejszy plik, szybszy encode
+      '-tune', 'fastdecode', // optymalizuj dla szybkiego decode (mobile player)
       '-pix_fmt', 'yuv420p',
       '-movflags', '+faststart',
       outputPath,
