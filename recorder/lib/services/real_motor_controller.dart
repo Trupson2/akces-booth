@@ -18,11 +18,21 @@ import 'motor_controller.dart';
 /// - speed 1-8
 /// - log ostatnich 30 wpisow (TX/events)
 class RealMotorController extends MotorController {
-  RealMotorController({this.recordingDuration = const Duration(seconds: 8)});
+  RealMotorController({this.recordingDuration = const Duration(seconds: 16)});
 
   /// Dlugosc nagrania - zgodne z CameraService/_kMaxRecording.
   /// ChackTok dolicza +3s bufora, my tez.
-  final Duration recordingDuration;
+  /// Mutable - ustawiany przez `setRecordingDuration` z event_config ze
+  /// Station, zeby motor krecil dokladnie tyle co nagranie.
+  Duration recordingDuration;
+
+  /// Ustawia dlugosc nagrania dla motora. Wywolywane przez recording_screen
+  /// PRZED motor.start() gdy event ma custom video_duration_s. Bez tego
+  /// motor krecil default 8s = stop 8s przed koncem 16s nagrania.
+  void setRecordingDuration(Duration d) {
+    recordingDuration = d;
+    _logMsg('duration set to ${d.inSeconds}s');
+  }
 
   MotorState _state = const MotorState.initial();
   final List<String> _log = <String>[];

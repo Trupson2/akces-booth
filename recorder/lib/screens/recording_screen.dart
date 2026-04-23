@@ -164,6 +164,15 @@ class _RecordingScreenState extends State<RecordingScreen>
       return;
     }
 
+    // Dynamiczny czas nagrania: bierzemy z event_config (Station Settings)
+    // albo fallback na _kMaxRecording const. Synchronizujemy z motorem
+    // zeby krecil dokladnie tyle samo ile nagranie.
+    final cfgDurSec = client.lastEventConfig?.videoDurationSec;
+    final effectiveDuration = cfgDurSec != null && cfgDurSec >= 3 && cfgDurSec <= 30
+        ? Duration(seconds: cfgDurSec)
+        : _kMaxRecording;
+    motor.setRecordingDuration(effectiveDuration);
+
     // START: motor + camera RÓWNOLEGLE zeby zsynchronizowac.
     // Przed fix: motor.start czekal na BLE ACK (200-500ms), POTEM kamera
     // - przez ten czas motor juz krecil ale nagranie nie zaczete.
@@ -194,14 +203,14 @@ class _RecordingScreenState extends State<RecordingScreen>
       tick++;
       if (tick % 2 == 0) {
         final elapsed = camera.recordingDuration.inMilliseconds;
-        final total = _kMaxRecording.inMilliseconds;
+        final total = effectiveDuration.inMilliseconds;
         client.sendRecordingProgress((elapsed / total).clamp(0.0, 1.0));
       }
     });
 
-    // Auto-stop po 8s
+    // Auto-stop po effectiveDuration (z event_config albo default 16s).
     _autoStopTimer?.cancel();
-    _autoStopTimer = Timer(_kMaxRecording, _stopRecording);
+    _autoStopTimer = Timer(effectiveDuration, _stopRecording);
   }
 
   Future<void> _stopRecording() async {
@@ -267,9 +276,14 @@ class _RecordingScreenState extends State<RecordingScreen>
       } else if (params.musicPath != null) {
         musicOffset = musicLib.viralOffsetFor(params.musicPath!);
       }
+      // inputDuration = faktyczny czas nagrania (event_config albo default).
+      final actualDur = client.lastEventConfig?.videoDurationSec;
+      final recordingDur = actualDur != null && actualDur >= 3 && actualDur <= 30
+          ? Duration(seconds: actualDur)
+          : _kMaxRecording;
       var config = ProcessingConfig.fromRandom(
         params: params,
-        inputDuration: _kMaxRecording,
+        inputDuration: recordingDur,
       );
       // Dodajemy overlay + text z event config (jesli dostarczone)
       // oraz offset muzyki (AI viral).
@@ -349,6 +363,11 @@ class _RecordingScreenState extends State<RecordingScreen>
       backgroundColor: Colors.black,
       body: Consumer<CameraService>(
         builder: (context, camera, _) {
+          // Dynamic max duration z event_config (Station Settings).
+          final cfgDur = context.read<StationClient>().lastEventConfig?.videoDurationSec;
+          final maxDur = cfgDur != null && cfgDur >= 3 && cfgDur <= 30
+              ? Duration(seconds: cfgDur)
+              : _kMaxRecording;
           return SafeArea(
             child: Stack(
               fit: StackFit.expand,
@@ -361,7 +380,7 @@ class _RecordingScreenState extends State<RecordingScreen>
                     camera: camera,
                     isRecording: camera.isRecording,
                     elapsed: camera.recordingDuration,
-                    max: _kMaxRecording,
+                    max: maxDur,
                     onToggle: _toggleRecord,
                     pulse: _pulse,
                   ),

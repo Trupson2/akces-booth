@@ -29,4 +29,8 @@ abstract class MotorController extends ChangeNotifier {
   Future<void> speedDown();
 
   Future<void> reverseDirection();
+
+  /// Ustawia dlugosc nagrania (motor krecil bedzie tyle co nagranie).
+  /// Domyslna impl = no-op (mock nie potrzebuje timera), Real nadpisuje.
+  void setRecordingDuration(Duration d) {}
 }
