@@ -123,7 +123,10 @@ _FRAME_LENGTH = 2048
 _SCORE_WINDOW_SEC = 3.0
 
 # Przedzialy wyszukiwania drop/chorus - procent dlugosci utworu.
-_SEARCH_MIN_FRAC = 0.15
+# Chorus/drop w pop/dance jest typowo 25-60% utworu. Intro/verse z
+# wokalami wpadal wczesniej w poprzednim 15% -> analiza pikowala na
+# verse zamiast chorus (user: "slychac jak ktos na poczatku spiewa").
+_SEARCH_MIN_FRAC = 0.25
 _SEARCH_MAX_FRAC = 0.75
 
 # Clamp output zeby zostawic zapas na nagranie (boomerang 8s + margines).
