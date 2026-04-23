@@ -164,10 +164,15 @@ class _RecordingScreenState extends State<RecordingScreen>
       return;
     }
 
-    // START: motor + camera razem
+    // START: motor + camera RÓWNOLEGLE zeby zsynchronizowac.
+    // Przed fix: motor.start czekal na BLE ACK (200-500ms), POTEM kamera
+    // - przez ten czas motor juz krecil ale nagranie nie zaczete.
+    // Teraz Future.wait = oba startuja w tym samym ticku.
     try {
-      await motor.start();
-      await camera.startRecording();
+      await Future.wait([
+        motor.start(),
+        camera.startRecording(),
+      ]);
     } catch (e) {
       client.sendError('start: $e');
       if (mounted) {
@@ -212,8 +217,12 @@ class _RecordingScreenState extends State<RecordingScreen>
     // Zbieramy MusicLibrary przed await zeby nie uzywac context across async.
     final musicLib = context.read<MusicLibrary>();
 
+    // STOP: motor najpierw (fire-and-forget, hardware decelerata 2-3s),
+    // kamera rownolegle (dispose encodera 1-2s). Bez unawaited motor
+    // czekal na zakonczenie camera stopRecording i fotobudka krecila
+    // jeszcze 2-3s dodatkowo.
+    unawaited(motor.stop());
     final rawPath = await camera.stopRecording();
-    await motor.stop();
     client.sendRecordingStopped();
 
     if (rawPath == null) return;
