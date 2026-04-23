@@ -204,48 +204,45 @@ class VideoProcessor extends ChangeNotifier {
 
   /// Zwraca sciezke do TTF fontu dla FFmpeg drawtext.
   ///
-  /// Priorytet: 1) Android system font (dziala zawsze, world-readable),
-  /// 2) bundled Roboto-Bold.ttf extracted do docs/fonts/ (fallback).
-  ///
-  /// Dlaczego system first: mobile ffmpeg-kit builds maja ograniczony
-  /// dostep do zewnetrznych paths - Android SELinux czasem blokuje
-  /// odczyt z app-specific directory pod native kodem. /system/fonts/
-  /// jest world-readable i native kod ma do niego dostep.
+  /// Priorytet: 1) Playfair Display Bold (bundled, elegancki serif do
+  /// ozdobnych napisow urodzinowych/weselnych), 2) system font Android
+  /// (fallback jesli extract zawiedzie przez SELinux).
   Future<String?> _ensureFontExtracted() async {
     if (_cachedFontPath != null && File(_cachedFontPath!).existsSync()) {
       return _cachedFontPath;
     }
-    // 1) System font - pewne rozwiazanie dla Android.
-    for (final sys in const [
-      '/system/fonts/Roboto-Regular.ttf',
-      '/system/fonts/Roboto-Bold.ttf',
-      '/system/fonts/DroidSans.ttf',
-    ]) {
-      if (File(sys).existsSync()) {
-        _cachedFontPath = sys;
-        debugPrint('[VideoProcessor] font: using system $sys');
-        return _cachedFontPath;
-      }
-    }
-    // 2) Bundled fallback - jesli jakims dziwnym sposobem brak system font.
+    // 1) Playfair Display Bold bundled - elegancki serif "grawerowany".
     try {
       final docsDir = await getApplicationDocumentsDirectory();
       final fontsDir = Directory(p.join(docsDir.path, 'fonts'));
       if (!await fontsDir.exists()) {
         await fontsDir.create(recursive: true);
       }
-      final target = File(p.join(fontsDir.path, 'Roboto-Bold.ttf'));
+      final target = File(p.join(fontsDir.path, 'PlayfairDisplay-Bold.ttf'));
       if (!await target.exists() || await target.length() == 0) {
-        final data = await rootBundle.load('assets/fonts/Roboto-Bold.ttf');
+        final data = await rootBundle.load(
+            'assets/fonts/PlayfairDisplay-Bold.ttf');
         await target.writeAsBytes(data.buffer.asUint8List(), flush: true);
       }
       _cachedFontPath = target.path;
-      debugPrint('[VideoProcessor] font: using bundled ${target.path}');
+      debugPrint('[VideoProcessor] font: bundled Playfair Display Bold');
       return _cachedFontPath;
     } catch (e) {
-      debugPrint('[VideoProcessor] font extract fail: $e');
-      return null;
+      debugPrint('[VideoProcessor] Playfair extract fail: $e');
     }
+    // 2) System font fallback.
+    for (final sys in const [
+      '/system/fonts/Roboto-Bold.ttf',
+      '/system/fonts/Roboto-Regular.ttf',
+      '/system/fonts/DroidSans.ttf',
+    ]) {
+      if (File(sys).existsSync()) {
+        _cachedFontPath = sys;
+        debugPrint('[VideoProcessor] font: fallback system $sys');
+        return _cachedFontPath;
+      }
+    }
+    return null;
   }
 
   /// Przygotowuje drawtext: ekstraktuje font, eskejpuje text do inline.
@@ -510,15 +507,16 @@ class VideoProcessor extends ChangeNotifier {
     if (drawText != null) {
       final drawtextFilters = <String>[];
       final fontEsc = _escapeFfmpegPath(drawText.fontPath);
-      // Styl:
-      //  - fontsize = h*0.032 (~62px na 1920p portrait, dobre do czytania
-      //    z odleglosci ~2m, nie dominuje kadru)
-      //  - fontcolor = white z lekka alpha dla miekszego akcentu
-      //  - box z 40% alpha czarna + padding 12px = czytelne na kwiatach
-      //  - shadowx/y = subtelny cien
-      const style = 'fontsize=h*0.032:fontcolor=white:'
-          'box=1:boxcolor=black@0.35:boxborderw=12:'
-          'shadowcolor=black@0.6:shadowx=2:shadowy=2';
+      // Styl "grawerowany zloto" - elegancki dla 18-tek/wesel:
+      //  - fontsize = h*0.042 (~80px na 1920p - wieksze niz poprzednio)
+      //  - fontcolor = bialy kremowy (#FFF8DC cornsilk) = lekka ciepla
+      //    tonacja zamiast sterylnej bieli
+      //  - borderw=4 bordercolor=zlota (#D4AF37) = "grawerowany" outline
+      //  - shadow 4,4 black@0.75 = glebia, efekt 3D wystajacego napisu
+      //  - BEZ box'a - wyglada plaskie, teraz pure typography na wideo
+      const style = 'fontsize=h*0.042:fontcolor=0xFFF8DC:'
+          'borderw=4:bordercolor=0xD4AF37:'
+          'shadowcolor=black@0.75:shadowx=4:shadowy=4';
       if (drawText.topText != null) {
         final esc = _escapeFfmpegText(drawText.topText!);
         drawtextFilters.add(
