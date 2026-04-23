@@ -451,13 +451,13 @@ class VideoProcessor extends ChangeNotifier {
     if (needsTranspose) {
       parts.add('[0:v]transpose=1[v_rot]');
       final mid = config.stabilize
-          ? '[v_rot]deshake=rx=24:ry=24:edge=mirror,'
+          ? '[v_rot]deshake=rx=32:ry=32:edge=mirror,'
               'scale=$targetW:$targetH,format=yuv420p,fps=30[v0]'
           : '[v_rot]scale=$targetW:$targetH,format=yuv420p,fps=30[v0]';
       parts.add(mid);
     } else {
       final preV = config.stabilize
-          ? '[0:v]deshake=rx=24:ry=24:edge=mirror,'
+          ? '[0:v]deshake=rx=32:ry=32:edge=mirror,'
               'scale=$targetW:$targetH,format=yuv420p,fps=30[v0]'
           : '[0:v]scale=$targetW:$targetH,format=yuv420p,fps=30[v0]';
       parts.add(preV);
