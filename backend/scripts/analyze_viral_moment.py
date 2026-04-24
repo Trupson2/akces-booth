@@ -310,7 +310,22 @@ def analyze_file(path: str | Path) -> dict[str, Any]:
     onset_n = _norm(onset_env)
     flux_n = _norm(flux)
 
-    energy = 0.45 * onset_n + 0.35 * flux_n + 0.20 * rms_n
+    # Bass-focused energy: chorus/drop zwykle ma mocny bas (<400Hz).
+    # mag shape: (n_freq_bins, n_frames). Freq resolution = sr/n_fft.
+    # Dla sr=22050, n_fft=2048: ~10.77Hz/bin -> 400Hz to bin 37.
+    bass_bin_max = int(400.0 / (sr / _FRAME_LENGTH))
+    bass_bin_max = max(1, min(bass_bin_max, mag.shape[0]))
+    bass_energy = np.sum(mag[:bass_bin_max, :], axis=0)
+    # Wyrownanie do tej samej dlugosci co pozostale features.
+    bass_energy = bass_energy[:min_len]
+    bass_n = _norm(bass_energy)
+
+    # Combined energy z waga na bass (chorus/drop detector):
+    # - bass (30%) - najwazniejszy dla "drop" momentu
+    # - onset (25%) - ogolna aktywnosc perkusji
+    # - flux (15%) - zmiany widma (intro chorus z nowymi instrumentami)
+    # - RMS (30%) - glosnosc (chorus glosny niz verse)
+    energy = 0.25 * onset_n + 0.15 * flux_n + 0.30 * rms_n + 0.30 * bass_n
 
     frames_per_sec = sr / _HOP_LENGTH
     win_frames = max(1, int(_SCORE_WINDOW_SEC * frames_per_sec))
@@ -322,27 +337,36 @@ def analyze_file(path: str | Path) -> dict[str, Any]:
         onset_env, sr=sr, hop_length=_HOP_LENGTH,
     )
 
-    lookback_frames = int(4.0 * frames_per_sec)
-    best_rise = -1.0
-    best_frame = -1
+    # NOWA STRATEGIA (2026-04-24): zamiast "najwiekszy skok po ciszy"
+    # (ktory lapal verse/drop) - szukamy 10-SEKUNDOWEGO OKNA z najwyzsza
+    # srednia energia = chorus/refren (najglosniejsza sustained sekcja).
+    # To bardziej niezawodne dla pop/dance - chorus zwykle najglosniejszy.
+    chorus_win_sec = 10.0
+    chorus_win_frames = max(1, int(chorus_win_sec * frames_per_sec))
 
     search_start = int(len(smooth) * _SEARCH_MIN_FRAC)
-    search_end = int(len(smooth) * _SEARCH_MAX_FRAC)
+    search_end = int(len(smooth) * _SEARCH_MAX_FRAC) - chorus_win_frames
 
-    for i in range(search_start, search_end):
-        lo_idx = max(0, i - lookback_frames)
-        window_min = float(np.min(smooth[lo_idx:i + 1]))
-        rise = float(smooth[i]) - window_min
-        abs_score = rise + 0.3 * float(smooth[i])
-        if abs_score > best_rise:
-            best_rise = abs_score
-            best_frame = i
+    best_mean = -1.0
+    best_frame = -1
+    if search_end > search_start:
+        # Efektywne rolling mean przez cumsum - O(N) zamiast O(N*W).
+        cumsum = np.cumsum(np.concatenate([[0.0], smooth]))
+        # window_means[i] = srednia smooth[i:i+chorus_win_frames]
+        window_means = (cumsum[chorus_win_frames:] - cumsum[:-chorus_win_frames]) / chorus_win_frames
+        # Szukamy max tylko w search window.
+        search_slice = window_means[search_start:search_end]
+        if search_slice.size > 0:
+            local_idx = int(np.argmax(search_slice))
+            best_frame = search_start + local_idx
+            best_mean = float(search_slice[local_idx])
 
     if best_frame < 0:
-        offset_sec = max(_OUTPUT_MIN_SEC, duration * 0.3)
+        offset_sec = max(_OUTPUT_MIN_SEC, duration * 0.35)
         confidence = 0.0
     else:
         offset_sec = float(best_frame) * _HOP_LENGTH / sr
+        # Snap do downbeatu zeby ciecie nie lapalo srodka frazy.
         if len(beat_times) > 4:
             downbeats = beat_times[::4]
             if len(downbeats) > 0:
@@ -350,7 +374,12 @@ def analyze_file(path: str | Path) -> dict[str, Any]:
                 snapped = float(downbeats[idx])
                 if abs(snapped - offset_sec) < 1.0:
                     offset_sec = snapped
-        confidence = float(min(1.0, best_rise / 1.5))
+        # Confidence: jak mocna jest srednia chorus vs srednia calosci.
+        overall_mean = float(np.mean(smooth))
+        if overall_mean > 0:
+            confidence = float(min(1.0, (best_mean - overall_mean) / overall_mean * 2.0))
+        else:
+            confidence = 0.0
 
     max_allowed = max(_OUTPUT_MIN_SEC, duration - _OUTPUT_TAIL_MARGIN)
     offset_sec = float(np.clip(offset_sec, _OUTPUT_MIN_SEC, max_allowed))
@@ -360,7 +389,7 @@ def analyze_file(path: str | Path) -> dict[str, Any]:
         "duration_sec": round(duration, 2),
         "confidence": round(confidence, 3),
         "tempo_bpm": round(tempo_bpm, 1),
-        "method": "onset_rise_after_quiet",
+        "method": "highest_sustained_energy_window",
     }
 
 
