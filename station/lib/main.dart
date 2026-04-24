@@ -11,6 +11,7 @@ import 'services/local_server.dart';
 import 'services/logger.dart';
 import 'services/mock_services.dart';
 import 'services/motor_controller.dart';
+import 'services/nearby_permissions.dart';
 import 'services/nearby_server.dart';
 import 'services/pending_uploads.dart';
 import 'services/pin_service.dart';
@@ -38,12 +39,11 @@ Future<void> main() async {
   await Log.init();
   Log.i('Station', 'boot start');
 
-  // Nearby advertising startujemy z gorki - OP13 sam nas znajdzie.
-  // LocalServer zostaje tylko dla HTTP /local/<short_id> (offline QR fallback)
-  // - commands/file transfer idzie przez Nearby.
+  // Nearby advertising startujemy po permission check (post-runApp zeby
+  // dialog mogl sie pokazac). LocalServer moze ruszyc od razu - HTTP nie
+  // potrzebuje runtime perms.
   final nearby = NearbyServer();
   final server = LocalServer();
-  unawaitedStartNearby(nearby);
   unawaitedStart(server);
 
   final backend = BackendClient();
@@ -93,15 +93,25 @@ Future<void> main() async {
       child: const AkcesBoothStation(),
     ),
   );
+
+  // Po wystartowaniu UI - request permissions, potem start Nearby.
+  // addPostFrameCallback czeka na pierwszy frame wiec dialog pojawi sie
+  // nad zaladowana apka (nie na pustym tle).
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    final granted = await NearbyPermissions.requestAll();
+    if (granted) {
+      await nearby.start();
+      Log.i('Station', 'Nearby advertising started');
+    } else {
+      Log.w('Station', 'Nearby permissions denied - advertising off '
+          '(Settings -> POLACZENIE -> przycisk Permissions)');
+    }
+  });
 }
 
 /// Fire-and-forget bo w initState nie mozemy awaitowac.
 void unawaitedStart(LocalServer s) {
   s.start();
-}
-
-void unawaitedStartNearby(NearbyServer n) {
-  n.start();
 }
 
 void unawaitedStartEvents(EventManager m) {

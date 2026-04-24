@@ -9,6 +9,7 @@ import '../models/motor_state.dart';
 import '../services/mock_motor_controller.dart';
 import '../services/motor_controller.dart';
 import '../services/nearby_client.dart';
+import '../services/nearby_permissions.dart';
 import '../services/settings_store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/big_button.dart';
@@ -317,21 +318,9 @@ class _StatusColumn extends StatelessWidget {
         const _BatteryIndicator(),
         const SizedBox(height: 8),
         // Nearby auto-discovery - nie ma juz Setup screena (IP config
-        // byl tylko dla WS). Tap pokazuje status dialog zeby user mial
-        // jakas akcje.
+        // byl tylko dla WS). Tap -> status bottom sheet z permission retry.
         InkWell(
-          onTap: () {
-            final n = context.read<NearbyClient>();
-            ScaffoldMessenger.of(context)
-              ..hideCurrentSnackBar()
-              ..showSnackBar(
-                SnackBar(
-                  content: Text(
-                      'Nearby: ${n.state.name}${n.lastError != null ? " (${n.lastError})" : ""}'),
-                  duration: const Duration(seconds: 3),
-                ),
-              );
-          },
+          onTap: () => _showNearbyActions(context),
           borderRadius: BorderRadius.circular(12),
           child: StatusIndicator(
             icon: Icons.tablet_mac_rounded,
@@ -341,6 +330,104 @@ class _StatusColumn extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  void _showNearbyActions(BuildContext context) {
+    final n = context.read<NearbyClient>();
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Nearby: ${n.state.name}',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700)),
+              if (n.lastError != null) ...[
+                const SizedBox(height: 6),
+                Text(n.lastError!,
+                    style: const TextStyle(
+                        color: AppTheme.error, fontSize: 12)),
+              ],
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  Navigator.of(ctx).pop();
+                  final granted = await NearbyPermissions.requestAll();
+                  if (!context.mounted) return;
+                  if (granted) {
+                    await n.start();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Permissions OK - szukam Station')),
+                    );
+                  } else if (await NearbyPermissions.anyPermanentlyDenied()) {
+                    if (!context.mounted) return;
+                    _showPermDeniedDialog(context);
+                  } else {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Czesc permissions odrzucona')),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.verified_user_rounded, size: 16),
+                label: const Text('Sprawdz permissions'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  Navigator.of(ctx).pop();
+                  await n.start();
+                },
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const Text('Restart discovery'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showPermDeniedDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: const Text('Permissions zablokowane',
+            style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'Niektore permissions sa ustawione "Nigdy nie pytaj". '
+          'Otworz systemowe ustawienia aplikacji i odblokuj recznie: '
+          'Bluetooth (Advertise/Connect/Scan), Lokalizacja, Nearby WiFi.',
+          style: TextStyle(color: AppTheme.muted, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dCtx).pop(),
+            child: const Text('Anuluj'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(dCtx).pop();
+              await NearbyPermissions.openSystemSettings();
+            },
+            child: const Text('Otworz Settings'),
+          ),
+        ],
+      ),
     );
   }
 }

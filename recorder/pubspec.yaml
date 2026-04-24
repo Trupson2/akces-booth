@@ -17,8 +17,8 @@ dependencies:
   path_provider: ^2.1.0
   video_player: ^2.9.0
   permission_handler: ^11.3.0
-  # WiFi client (Station communication)
-  web_socket_channel: ^2.4.0
+  # Dio: event asset downloads (overlay/music URL) w NearbyClient.
+  # WS wywalone w Etap 3.
   dio: ^5.4.0
   path: ^1.9.0
   # BLE motor (YCKJNB / 360 Controller)

@@ -9,6 +9,7 @@ import 'services/mock_motor_controller.dart';
 import 'services/motor_controller.dart';
 import 'services/music_library.dart';
 import 'services/nearby_client.dart';
+import 'services/nearby_permissions.dart';
 import 'services/real_motor_controller.dart';
 import 'services/settings_store.dart';
 import 'services/video_processor.dart';
@@ -30,8 +31,8 @@ Future<void> main() async {
 
   // Nearby Connections discovery - OP13 sam szuka Tab Station w zasiegu
   // (BT+WiFi Direct hybrid). Bez hotspotu, bez IP config.
+  // Start po permission check w post-runApp callback (dialog wymaga UI).
   final nearbyClient = NearbyClient(store: store);
-  unawaited(nearbyClient.start());
 
   // Music library - kopiuje MP3 z assets do docs/music/ przy starcie.
   final musicLib = MusicLibrary();
@@ -57,6 +58,19 @@ Future<void> main() async {
       child: const AkcesBoothRecorder(),
     ),
   );
+
+  // Po wystartowaniu UI - request permissions, potem start Nearby discovery.
+  // addPostFrameCallback czeka na pierwszy frame zeby dialog pojawil sie
+  // nad zaladowana apka (nie na pustym tle).
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    final granted = await NearbyPermissions.requestAll();
+    if (granted) {
+      await nearbyClient.start();
+      debugPrint('[Recorder] Nearby discovery started');
+    } else {
+      debugPrint('[Recorder] Nearby permissions denied - discovery off');
+    }
+  });
 }
 
 void unawaited(Future<void> f) {

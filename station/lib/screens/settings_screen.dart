@@ -8,6 +8,7 @@ import '../services/app_state_machine.dart';
 import '../services/backend_client.dart';
 import '../services/event_manager.dart';
 import '../services/mock_services.dart';
+import '../services/nearby_permissions.dart';
 import '../services/nearby_server.dart';
 import '../services/pin_service.dart';
 import '../services/settings_store.dart';
@@ -102,6 +103,8 @@ class SettingsScreen extends StatelessWidget {
             title: '📡 POLACZENIE Z RECORDER (Nearby)',
             children: [
               _NearbyStatusRow(nearby: nearby),
+              const SizedBox(height: 12),
+              const _NearbyPermissionsButton(),
             ],
           ),
           _ConnectionsSection(
@@ -213,6 +216,106 @@ class _Row extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Przycisk sprawdzenia / pobrania na nowo permissions dla Nearby.
+/// Pokazuje snack bar z rezultatem, przy permanent-deny oferuje System Settings.
+class _NearbyPermissionsButton extends StatefulWidget {
+  const _NearbyPermissionsButton();
+
+  @override
+  State<_NearbyPermissionsButton> createState() =>
+      _NearbyPermissionsButtonState();
+}
+
+class _NearbyPermissionsButtonState extends State<_NearbyPermissionsButton> {
+  bool _busy = false;
+
+  Future<void> _check() async {
+    setState(() => _busy = true);
+    try {
+      final granted = await NearbyPermissions.requestAll();
+      if (!mounted) return;
+      if (granted) {
+        // Poinformuj i sprobuj restartowac Nearby gdyby byl w error state.
+        final n = context.read<NearbyServer>();
+        if (!n.isRecorderConnected && n.state != NearbyConnState.advertising) {
+          await n.start();
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Permissions OK - Nearby wystartowany')),
+        );
+      } else if (await NearbyPermissions.anyPermanentlyDenied()) {
+        if (!mounted) return;
+        _showPermanentlyDeniedDialog();
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Czesc permissions odrzucona - Nearby moze '
+                'nie dzialac. Sprobuj ponownie.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _showPermanentlyDeniedDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: const Text('Permissions zablokowane',
+            style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'Niektore permissions sa ustawione "Nigdy nie pytaj". '
+          'Otworz systemowe ustawienia aplikacji i odblokuj recznie:\n\n'
+          'Bluetooth (Advertise/Connect/Scan), Lokalizacja, Nearby WiFi.',
+          style: TextStyle(color: AppTheme.muted, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dCtx).pop(),
+            child: const Text('Anuluj',
+                style: TextStyle(color: AppTheme.muted)),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(dCtx).pop();
+              await NearbyPermissions.openSystemSettings();
+            },
+            child: const Text('Otworz Settings',
+                style: TextStyle(color: AppTheme.primary)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _busy ? null : _check,
+            icon: _busy
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.verified_user_rounded, size: 16),
+            label: Text(_busy
+                ? 'Sprawdzam...'
+                : 'Sprawdz permissions (BT / Location)'),
+          ),
+        ),
+      ],
     );
   }
 }
