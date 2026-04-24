@@ -136,7 +136,9 @@ class NearbyClient extends ChangeNotifier {
       String endpointId, String endpointName, String serviceId) async {
     debugPrint('[NearbyClient] found $endpointId ($endpointName)');
     if (_state == NearbyClientState.connected ||
-        _state == NearbyClientState.connecting) return;
+        _state == NearbyClientState.connecting) {
+      return;
+    }
     _discoveredEndpointId = endpointId;
     _setState(NearbyClientState.connecting);
     try {
@@ -340,8 +342,8 @@ class NearbyClient extends ChangeNotifier {
     return null;
   }
 
-  /// Pobiera URL backendu do docs/event_assets/<hash>.bin. Cache keyed by
-  /// URL - ten sam URL = ten sam plik (skip re-download). Plik zachowany
+  /// Pobiera URL backendu do `docs/event_assets/<hash>.bin`. Cache keyed
+  /// by URL - ten sam URL = ten sam plik (skip re-download). Plik zachowany
   /// miedzy sesjami Recorder.
   Future<String?> _downloadEventAsset(String url, String label) async {
     try {
@@ -498,8 +500,8 @@ class NearbyClient extends ChangeNotifier {
   void sendStatus({int? batteryPct, double? diskFreeGb}) =>
       sendToStation({
         'type': WireMsg.recorderStatus,
-        if (batteryPct != null) 'battery': batteryPct,
-        if (diskFreeGb != null) 'disk_free_gb': diskFreeGb,
+        'battery': ?batteryPct,
+        'disk_free_gb': ?diskFreeGb,
       });
 
   // ------------------------------------------------------------------

@@ -367,6 +367,7 @@ class _StatusColumn extends StatelessWidget {
                   if (!context.mounted) return;
                   if (granted) {
                     await n.start();
+                    if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                           content: Text('Permissions OK - szukam Station')),

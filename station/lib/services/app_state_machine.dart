@@ -30,7 +30,7 @@ class AppStateMachine extends ChangeNotifier {
   /// Nearby transport do Recorder (commands + file transfer).
   final NearbyServer? nearby;
 
-  /// LocalServer - trzymany wylacznie dla HTTP /local/<short_id> offline
+  /// LocalServer - trzymany wylacznie dla HTTP `/local/<short_id>` offline
   /// fallback (PendingUploadsService) i registerLocalVideo. WS/upload
   /// zniknely z LocalServer w Etap 3.
   final LocalServer? server;

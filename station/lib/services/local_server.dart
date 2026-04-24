@@ -29,8 +29,8 @@ class LocalServer extends ChangeNotifier {
   String? _localIp;
   String? _lastError;
 
-  /// Map short_id -> sciezka lokalnego pliku. Serwujemy to pod /local/<id>
-  /// jako fallback gdy upload do RPi niedostepny.
+  /// Map short_id -> sciezka lokalnego pliku. Serwujemy to pod
+  /// `/local/<id>` jako fallback gdy upload do RPi niedostepny.
   final Map<String, String> _localVideos = {};
 
   bool get isRunning => _server != null;
@@ -120,8 +120,9 @@ class LocalServer extends ChangeNotifier {
     );
   }
 
-  /// GET /local/<short_id> - serwuje film bezposrednio z Tabu (offline fallback).
-  /// Uzywane gdy RPi niedostepny - gosc pobiera film lokalnie. QR linkuje tutaj.
+  /// `GET /local/<short_id>` - serwuje film bezposrednio z Tabu (offline
+  /// fallback). Uzywane gdy RPi niedostepny - gosc pobiera film lokalnie.
+  /// QR linkuje tutaj.
   Future<Response> _handleLocalVideo(Request req, String shortId) async {
     final path = _localVideos[shortId];
     if (path == null) {

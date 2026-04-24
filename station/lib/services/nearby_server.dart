@@ -91,9 +91,10 @@ class NearbyServer extends ChangeNotifier {
   /// jeden Recorder wysyla po kolei.
   final List<String> _pendingFileNames = [];
 
-  /// Map payload.id -> temp filePath (set na FILE payload init, read przy
-  /// SUCCESS zeby znalezc plik do przeniesienia).
-  final Map<int, String> _fileTempPaths = {};
+  /// Map payload.id -> source (content URI na A11+, absolutna sciezka na
+  /// A10-). Set na FILE payload init, read przy SUCCESS zeby znalezc plik
+  /// do przeniesienia.
+  final Map<int, String> _fileSources = {};
 
   /// Stan widoczny dla UI (idle/advertising/connected).
   NearbyConnState get state => _state;
@@ -206,14 +207,16 @@ class NearbyServer extends ChangeNotifier {
         Log.w('NearbyServer', 'bytes parse fail: $e');
       }
     } else if (payload.type == PayloadType.FILE) {
-      // Nearby zapisuje plik do swojego temp (payload.filePath). Po
-      // SUCCESS przenosimy do received/<short_name> uzywajac prekursora.
-      final temp = payload.filePath ?? '';
-      if (temp.isNotEmpty) {
-        _fileTempPaths[payload.id] = temp;
+      // Nearby zapisuje plik w scoped storage. Na A11+ plugin wystawia
+      // content URI (payload.uri), na A10- absolutna sciezka (filePath).
+      // Preferujemy uri - to standardowy sposob A11+.
+      // ignore: deprecated_member_use (filePath fallback dla starszych Androidow)
+      final source = payload.uri ?? payload.filePath ?? '';
+      if (source.isNotEmpty) {
+        _fileSources[payload.id] = source;
       }
       Log.i('NearbyServer',
-          'file payload ${payload.id} started (temp=$temp)');
+          'file payload ${payload.id} started (source=$source)');
     }
   }
 
@@ -286,8 +289,8 @@ class NearbyServer extends ChangeNotifier {
       String endpointId, PayloadTransferUpdate update) async {
     // BYTES SUCCESS/FAILURE zostaje no-op (dostarczenie potwierdzone przez
     // nasz handshake message-level). Tu obsługujemy tylko FILE transfer.
-    final tempPath = _fileTempPaths.remove(update.id);
-    if (tempPath == null) {
+    final source = _fileSources.remove(update.id);
+    if (source == null) {
       // Nie znalezlismy mapowania -> to byl BYTES lub nieoczekiwany payload.
       if (update.status == PayloadStatus.FAILURE) {
         Log.w('NearbyServer', 'payload ${update.id} FAILURE (bytes?)');
@@ -306,30 +309,45 @@ class NearbyServer extends ChangeNotifier {
       try {
         final destDir = await receivedDir();
         final destPath = p.join(destDir, shortName);
-        final tempFile = File(tempPath);
-        if (!await tempFile.exists()) {
-          Log.w('NearbyServer', 'temp file missing: $tempPath');
-          return;
-        }
+        String? finalPath;
 
-        File finalFile;
-        try {
-          // Rename = atomic na tym samym FS. Nearby i receivedDir oba sa
-          // w app-private storage wiec normalnie to jest ten sam FS.
-          finalFile = await tempFile.rename(destPath);
-        } on FileSystemException {
-          // Fallback: copy + delete (gdyby cross-FS - rzadki case).
-          finalFile = await tempFile.copy(destPath);
+        if (source.startsWith('content://')) {
+          // A11+: plugin helper otwiera ContentResolver.openInputStream(uri),
+          // kopiuje do newPath, usuwa original przez content resolver.
+          final ok = await _nearby.copyFileAndDeleteOriginal(source, destPath);
+          if (ok) {
+            finalPath = destPath;
+          } else {
+            Log.w('NearbyServer',
+                'copyFileAndDeleteOriginal fail for uri=$source');
+          }
+        } else {
+          // A10-: absolutna sciezka, rename (atomic na tym samym FS) albo
+          // copy+delete jako fallback.
+          final tempFile = File(source);
+          if (!await tempFile.exists()) {
+            Log.w('NearbyServer', 'temp file missing: $source');
+            return;
+          }
           try {
-            await tempFile.delete();
-          } catch (_) {}
+            final renamed = await tempFile.rename(destPath);
+            finalPath = renamed.path;
+          } on FileSystemException {
+            final copied = await tempFile.copy(destPath);
+            try {
+              await tempFile.delete();
+            } catch (_) {}
+            finalPath = copied.path;
+          }
         }
 
-        Log.i('NearbyServer', 'file saved: ${finalFile.path}');
-        try {
-          onFileReceived?.call(shortName, finalFile.path, bytes);
-        } catch (e) {
-          Log.e('NearbyServer', 'onFileReceived cb err: $e');
+        if (finalPath != null) {
+          Log.i('NearbyServer', 'file saved: $finalPath');
+          try {
+            onFileReceived?.call(shortName, finalPath, bytes);
+          } catch (e) {
+            Log.e('NearbyServer', 'onFileReceived cb err: $e');
+          }
         }
       } catch (e, st) {
         Log.e('NearbyServer', 'file move error: $e\n$st');
@@ -338,11 +356,14 @@ class NearbyServer extends ChangeNotifier {
       Log.w('NearbyServer', 'file payload ${update.id} FAILURE');
       // Prekursor (short_name) konsumujemy zeby nie zostawic kolejki brudnej.
       if (_pendingFileNames.isNotEmpty) _pendingFileNames.removeAt(0);
-      // Cleanup temp file jesli ostal.
-      try {
-        final f = File(tempPath);
-        if (await f.exists()) await f.delete();
-      } catch (_) {}
+      // Cleanup - przy URI plugin sam ogarnia via ContentResolver, przy
+      // filePath probujemy usunac plik.
+      if (!source.startsWith('content://')) {
+        try {
+          final f = File(source);
+          if (await f.exists()) await f.delete();
+        } catch (_) {}
+      }
     }
   }
 

@@ -243,6 +243,7 @@ class _NearbyPermissionsButtonState extends State<_NearbyPermissionsButton> {
         final n = context.read<NearbyServer>();
         if (!n.isRecorderConnected && n.state != NearbyConnState.advertising) {
           await n.start();
+          if (!mounted) return;
         }
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Permissions OK - Nearby wystartowany')),
