@@ -26,6 +26,12 @@ class NearbyPermissions {
   }
 
   static Future<bool> requestAll() async {
+    // Short-circuit: jesli wszystkie sa juz granted, nie odpalamy dialog -
+    // unikamy "Akceptuj all" przy kazdym starcie apki.
+    if (await hasAll()) {
+      debugPrint('[NearbyPermissions] requestAll short-circuit: all granted');
+      return true;
+    }
     // Race guard: plugin permission_handler rzuca PlatformException gdy
     // drugi request wystartuje podczas aktywnego (np. MotorController BT
     // perms + NearbyPermissions w tym samym post-frame callback). Retry

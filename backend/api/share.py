@@ -128,12 +128,24 @@ def video_frame(short_id: str):  # type: ignore[no-untyped-def]
     with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
         frame_path = tmp.name
 
+    # Systemd gunicorn czesto ma okrojony PATH (brak /usr/bin). Probujemy
+    # pelne sciezki + fallback na "ffmpeg" z PATH.
+    import shutil
+    ffmpeg_bin = (
+        shutil.which("ffmpeg")
+        or ("/usr/bin/ffmpeg" if Path("/usr/bin/ffmpeg").exists() else None)
+        or ("/usr/local/bin/ffmpeg" if Path("/usr/local/bin/ffmpeg").exists() else None)
+    )
+    if ffmpeg_bin is None:
+        log.error("ffmpeg not found anywhere (PATH+known dirs)")
+        abort(500)
+
     try:
         # -ss przed -i = fast seek (keyframe), wystarczy dla pierwszej klatki.
         # -vframes 1 = tylko jedna klatka. -q:v 2 = wysoka jakosc JPEG.
         proc = subprocess.run(
             [
-                "ffmpeg", "-y", "-ss", str(t), "-i", str(p),
+                ffmpeg_bin, "-y", "-ss", str(t), "-i", str(p),
                 "-vframes", "1", "-q:v", "2", frame_path,
             ],
             capture_output=True, timeout=15,
@@ -145,7 +157,7 @@ def video_frame(short_id: str):  # type: ignore[no-untyped-def]
     except subprocess.TimeoutExpired:
         abort(504)
     except FileNotFoundError:
-        log.error("ffmpeg not found on PATH")
+        log.error("ffmpeg binary %s not executable", ffmpeg_bin)
         abort(500)
 
     download_name = f"akces_booth_{short_id}_frame.jpg"

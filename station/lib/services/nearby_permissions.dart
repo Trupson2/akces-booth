@@ -47,7 +47,14 @@ class NearbyPermissions {
   ///
   /// Race guard: retry do 3 prob jesli inny request permissions jest
   /// rownolegly aktywny (PlatformException "already running").
+  ///
+  /// Short-circuit: jesli wszystkie sa juz granted, return true bez
+  /// pokazywania systemowego dialogu (unikamy raz-na-start "Akceptuj all").
   static Future<bool> requestAll() async {
+    if (await hasAll()) {
+      debugPrint('[NearbyPermissions] requestAll short-circuit: all granted');
+      return true;
+    }
     for (int attempt = 1; attempt <= 3; attempt++) {
       try {
         final statuses = await _required.request();
