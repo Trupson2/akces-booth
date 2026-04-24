@@ -33,6 +33,9 @@ dependencies:
   battery_plus: ^6.2.0
   # Ekran zawsze aktywny - Tab nie moze zgasnac podczas eventu.
   wakelock_plus: ^1.2.8
+  # P2P communication Tab<->OP13 bez routera/hotspota (BT+WiFi Direct hybrid).
+  # Migracja ze WS zeby unikac niestabilnych LTE hotspotow na evencie.
+  nearby_connections: ^4.3.0
 
 dev_dependencies:
   flutter_test:

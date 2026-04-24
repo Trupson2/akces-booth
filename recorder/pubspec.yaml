@@ -29,6 +29,8 @@ dependencies:
   battery_plus: ^6.2.0
   # Ekran zawsze aktywny (fotobudka nie moze isc spac podczas eventu).
   wakelock_plus: ^1.2.8
+  # P2P communication Recorder<->Station bez routera/hotspota.
+  nearby_connections: ^4.3.0
 
 dev_dependencies:
   flutter_test:
