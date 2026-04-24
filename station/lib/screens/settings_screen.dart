@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/material.dart';
@@ -103,6 +104,8 @@ class SettingsScreen extends StatelessWidget {
             title: '📡 POLACZENIE Z RECORDER (Nearby)',
             children: [
               _NearbyStatusRow(nearby: nearby),
+              const SizedBox(height: 12),
+              _BoothCodeRow(settings: settings, nearby: nearby),
               const SizedBox(height: 12),
               const _NearbyPermissionsButton(),
             ],
@@ -220,6 +223,75 @@ class _Row extends StatelessWidget {
   }
 }
 
+/// Widget z booth code - pokazuje aktualny kod pairingu, daje regenerate
+/// i kopiowanie do schowka. Ten kod musi byc wpisany na Recorderze zeby
+/// service IDs sie zgadzaly i peer sie znalazl - bez tego nie laczy.
+class _BoothCodeRow extends StatelessWidget {
+  const _BoothCodeRow({required this.settings, required this.nearby});
+  final SettingsStore settings;
+  final NearbyServer nearby;
+
+  Future<void> _regenerate(BuildContext context) async {
+    // Generuj nowy kod i zrestartuj advertising.
+    final rng = math.Random();
+    final newCode = (rng.nextInt(9999) + 1).toString().padLeft(4, '0');
+    await settings.setBoothCode(newCode);
+    await nearby.restartWithCode(newCode);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Nowy kod booth: $newCode - wpisz go na Recorder')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final code = settings.boothCode;
+    return Row(
+      children: [
+        const Icon(Icons.vpn_key_rounded, color: AppTheme.accent, size: 22),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'KOD BOOTH',
+                style: TextStyle(
+                  color: AppTheme.muted,
+                  fontSize: 10,
+                  letterSpacing: 1.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                code.isEmpty ? '----' : code,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 6,
+                ),
+              ),
+              const Text(
+                'Wpisz ten kod na Recorder zeby sparowac',
+                style: TextStyle(color: AppTheme.muted, fontSize: 11),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          tooltip: 'Wygeneruj nowy',
+          icon: const Icon(Icons.refresh_rounded,
+              color: AppTheme.muted, size: 20),
+          onPressed: () => _regenerate(context),
+        ),
+      ],
+    );
+  }
+}
+
 /// Przycisk sprawdzenia / pobrania na nowo permissions dla Nearby.
 /// Pokazuje snack bar z rezultatem, przy permanent-deny oferuje System Settings.
 class _NearbyPermissionsButton extends StatefulWidget {
@@ -241,8 +313,9 @@ class _NearbyPermissionsButtonState extends State<_NearbyPermissionsButton> {
       if (granted) {
         // Poinformuj i sprobuj restartowac Nearby gdyby byl w error state.
         final n = context.read<NearbyServer>();
+        final settings = context.read<SettingsStore>();
         if (!n.isRecorderConnected && n.state != NearbyConnState.advertising) {
-          await n.start();
+          await n.start(settings.boothCode);
           if (!mounted) return;
         }
         ScaffoldMessenger.of(context).showSnackBar(

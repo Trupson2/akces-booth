@@ -12,6 +12,7 @@ class SettingsStore {
   static const _kStabilize = 'recorder.stabilize';
   static const _kDemoMode = 'recorder.demo_mode';
   static const _kZoomLevel = 'recorder.zoom_level';
+  static const _kBoothCode = 'nearby.booth_code'; // 4-digit pairing code
 
   SharedPreferences? _prefs;
 
@@ -111,5 +112,22 @@ class SettingsStore {
   Future<void> saveZoomLevel(double z) async {
     final p = await _get();
     await p.setDouble(_kZoomLevel, z);
+  }
+
+  /// Kod booth do pairingu z Nearby. User wpisuje raz (pobrany z Station
+  /// Settings), potem autoconnect. Bez kodu NearbyClient nie uruchamia
+  /// discovery - serviceId nie dopasowany = nigdy nie znajdziemy Station.
+  Future<String?> loadBoothCode() async {
+    final p = await _get();
+    final code = p.getString(_kBoothCode);
+    if (code == null || code.length != 4) return null;
+    return code;
+  }
+
+  Future<void> saveBoothCode(String code) async {
+    final clean = code.trim();
+    if (clean.length != 4 || int.tryParse(clean) == null) return;
+    final p = await _get();
+    await p.setString(_kBoothCode, clean);
   }
 }

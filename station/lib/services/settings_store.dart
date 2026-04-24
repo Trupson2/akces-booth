@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -15,6 +17,7 @@ class SettingsStore extends ChangeNotifier {
   static const _kZoomLevel = 'rec.zoom_level';
   static const _kFbDefaultOn = 'ui.fb_default_on';
   static const _kFallbackMusic = 'rec.fallback_music'; // label
+  static const _kBoothCode = 'nearby.booth_code'; // 4-digit pairing code
 
   // Defaults (zgodne z WORKFLOW.md - 8s, 2x, mixed, 7/10)
   // Resolution fullHd = bezpieczny default (FFmpeg szybki, 8s plik ~40MB).
@@ -28,6 +31,7 @@ class SettingsStore extends ChangeNotifier {
   double _zoomLevel = 1.0;
   bool _fbDefaultOn = false;
   String _fallbackMusic = 'Energetic Party';
+  String _boothCode = '';
 
   bool _loaded = false;
   bool get isLoaded => _loaded;
@@ -42,6 +46,11 @@ class SettingsStore extends ChangeNotifier {
   bool get fbDefaultOn => _fbDefaultOn;
   String get fallbackMusic => _fallbackMusic;
 
+  /// 4-cyfrowy kod pairingu dla Nearby. Ten sam kod musi byc wpisany
+  /// na Recorderze zeby service IDs sie zgadzaly i peer sie znalazl.
+  /// Generowany raz przy pierwszym starcie, zapisany w prefs.
+  String get boothCode => _boothCode;
+
   Future<void> load() async {
     final p = await SharedPreferences.getInstance();
     _videoDurationSec = p.getInt(_kVideoDuration) ?? 16;
@@ -53,7 +62,36 @@ class SettingsStore extends ChangeNotifier {
     _zoomLevel = p.getDouble(_kZoomLevel) ?? 1.0;
     _fbDefaultOn = p.getBool(_kFbDefaultOn) ?? false;
     _fallbackMusic = p.getString(_kFallbackMusic) ?? 'Energetic Party';
+    // Booth code: wygeneruj random 4-cyfrowy przy pierwszym starcie.
+    // Kolejne starty czytaja z prefs.
+    final saved = p.getString(_kBoothCode);
+    if (saved != null && saved.length == 4) {
+      _boothCode = saved;
+    } else {
+      _boothCode = _generateBoothCode();
+      await p.setString(_kBoothCode, _boothCode);
+    }
     _loaded = true;
+    notifyListeners();
+  }
+
+  /// Generuje losowy 4-cyfrowy kod (0001-9999). Wystarczy dla
+  /// roznicowania kilku boothow w okolicy - nie crypto random.
+  static String _generateBoothCode() {
+    final rng = math.Random();
+    final n = rng.nextInt(9999) + 1;
+    return n.toString().padLeft(4, '0');
+  }
+
+  /// Nadpisuje booth code (user moze rotowac w Settings). Zapisane
+  /// do prefs. Po zmianie trzeba zrestartowac NearbyServer (advertising
+  /// musi ruszyc z nowym serviceId).
+  Future<void> setBoothCode(String code) async {
+    final clean = code.trim();
+    if (clean.length != 4 || int.tryParse(clean) == null) return;
+    _boothCode = clean;
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kBoothCode, clean);
     notifyListeners();
   }
 

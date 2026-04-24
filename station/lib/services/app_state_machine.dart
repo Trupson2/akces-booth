@@ -210,7 +210,8 @@ class AppStateMachine extends ChangeNotifier {
             _enterError(
               title: 'Fotobudka nie odpowiada',
               message: 'Recorder nie przyslal potwierdzenia nagrywania. '
-                  'Sprawdz BT i Wi-Fi fotobudki, potem sprobuj ponownie.',
+                  'Sprawdz Bluetooth + Lokalizacja na fotobudce, '
+                  'potem sprobuj ponownie.',
               from: AppState.recording,
             );
           });
@@ -244,7 +245,8 @@ class AppStateMachine extends ChangeNotifier {
             _enterError(
               title: 'Problem z przeslaniem filmu',
               message: 'Recorder nie mogl wyslac filmu do Station. '
-                  'Sprawdz Wi-Fi, film moze byc nadal na telefonie.',
+                  'Sprawdz czy oba sa w zasiegu Nearby (<30m) i czy '
+                  'polaczenie nie zerwalo. Film moze byc nadal na telefonie.',
               from: AppState.transfer,
             );
           });

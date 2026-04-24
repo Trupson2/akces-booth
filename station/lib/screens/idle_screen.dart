@@ -460,7 +460,7 @@ class _ResolutionChip extends StatelessWidget {
                   icon: Icons.flash_on_rounded,
                   iconColor: AppTheme.success,
                   title: 'Full HD 1080p',
-                  subtitle: 'Szybko · transfer WiFi 2-4s · ~40MB',
+                  subtitle: 'Szybko · transfer Nearby 2-4s · ~40MB',
                   selected: settings.resolution == 'fullHd',
                   onTap: () async {
                     await settings.setResolution('fullHd');
@@ -475,7 +475,7 @@ class _ResolutionChip extends StatelessWidget {
                   icon: Icons.hd_rounded,
                   iconColor: AppTheme.accent,
                   title: '4K Ultra HD',
-                  subtitle: 'Premium · transfer WiFi 8-15s · ~150MB',
+                  subtitle: 'Premium · transfer Nearby 8-15s · ~150MB',
                   selected: settings.resolution == 'uhd4k',
                   onTap: () async {
                     await settings.setResolution('uhd4k');

@@ -15,7 +15,7 @@ class TransferScreen extends StatelessWidget {
     return ProgressScreenTemplate(
       emoji: '📡',
       title: 'Odbieram film...',
-      subtitle: 'Transfer z kamery do tabletu przez WiFi',
+      subtitle: 'Transfer z kamery do tabletu przez Nearby (BT+WiFi Direct)',
       progress: sm.progress,
       barColor: AppTheme.accent,
     );

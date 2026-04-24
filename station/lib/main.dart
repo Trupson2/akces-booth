@@ -96,12 +96,14 @@ Future<void> main() async {
 
   // Po wystartowaniu UI - request permissions, potem start Nearby.
   // addPostFrameCallback czeka na pierwszy frame wiec dialog pojawi sie
-  // nad zaladowana apka (nie na pustym tle).
+  // nad zaladowana apka (nie na pustym tle). BoothCode musi byc zaladowany
+  // z SettingsStore (load() wykonane w await Future.wait powyzej).
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     final granted = await NearbyPermissions.requestAll();
     if (granted) {
-      await nearby.start();
-      Log.i('Station', 'Nearby advertising started');
+      await nearby.start(settings.boothCode);
+      Log.i('Station', 'Nearby advertising started (boothCode='
+          '${settings.boothCode})');
     } else {
       Log.w('Station', 'Nearby permissions denied - advertising off '
           '(Settings -> POLACZENIE -> przycisk Permissions)');

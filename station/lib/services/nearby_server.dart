@@ -10,12 +10,17 @@ import 'package:path_provider/path_provider.dart';
 import 'logger.dart';
 import 'wire_protocol.dart';
 
-/// Service ID - unikalny identyfikator naszej apki.
-/// Zmien suffix na `.v2` przy zmianie protokolu wymagajacej reinstall.
-const String _kServiceId = 'pl.akces360.booth.nearby.v1';
+/// Prefix Service ID - unikalny identyfikator apki (nie konkretnego booth).
+/// Zmien `.v2` suffix przy zmianie protokolu wymagajacej reinstall.
+///
+/// Pelny serviceId = `$_kServiceIdPrefix.<boothCode>`. BoothCode zapewnia
+/// ze Recorder widzi tylko swoj Station - dwa boothy obok siebie nie mixuja.
+const String _kServiceIdPrefix = 'pl.akces360.booth.nearby.v1';
 
 /// Nazwa widoczna po stronie Recordera w discovery.
 const String _kAdvertiserName = 'AkcesBooth-Station';
+
+String _serviceIdFor(String boothCode) => '$_kServiceIdPrefix.$boothCode';
 
 /// Stan polaczenia - pojedynczy peer Recorder (P2P_POINT_TO_POINT).
 enum NearbyConnState {
@@ -54,6 +59,12 @@ class NearbyServer extends ChangeNotifier {
   NearbyConnState _state = NearbyConnState.idle;
   String? _connectedEndpointId;
   String? _lastError;
+
+  /// Aktualny booth code uzyty w serviceId. Zmieniany przez [restartWithCode]
+  /// gdy user rotuje kod w Settings.
+  String _boothCode = '';
+  String get boothCode => _boothCode;
+  String get serviceId => _serviceIdFor(_boothCode);
 
   /// Ostatnio zaraportowane przez Recorder (komunikat `recorder_status`).
   /// Null = jeszcze nic nie dotarlo.
@@ -105,24 +116,34 @@ class NearbyServer extends ChangeNotifier {
   // Lifecycle
   // ------------------------------------------------------------------
 
-  /// Start advertising. Powinno byc wolane raz po permission check.
-  Future<void> start() async {
-    if (_state == NearbyConnState.advertising ||
-        _state == NearbyConnState.connected) {
+  /// Start advertising. Powinno byc wolane raz po permission check z
+  /// aktualnym boothCode z SettingsStore.
+  Future<void> start(String boothCode) async {
+    if (boothCode.length != 4) {
+      _setState(NearbyConnState.error,
+          error: 'booth code invalid: "$boothCode"');
       return;
     }
+    if (_state == NearbyConnState.advertising ||
+        _state == NearbyConnState.connected) {
+      if (boothCode == _boothCode) return; // juz chodzi z tym kodem
+      // Inny kod - restart.
+      await stop();
+    }
+    _boothCode = boothCode;
     try {
       final started = await _nearby.startAdvertising(
         _kAdvertiserName,
         Strategy.P2P_POINT_TO_POINT,
-        serviceId: _kServiceId,
+        serviceId: serviceId,
         onConnectionInitiated: _onConnInit,
         onConnectionResult: _onConnResult,
         onDisconnected: _onDisconnected,
       );
       if (started) {
         _setState(NearbyConnState.advertising);
-        Log.i('NearbyServer', 'advertising as $_kAdvertiserName');
+        Log.i('NearbyServer',
+            'advertising as $_kAdvertiserName (serviceId=$serviceId)');
       } else {
         _setState(NearbyConnState.error,
             error: 'startAdvertising returned false');
@@ -131,6 +152,13 @@ class NearbyServer extends ChangeNotifier {
       Log.e('NearbyServer', 'start failed: $e\n$st');
       _setState(NearbyConnState.error, error: e.toString());
     }
+  }
+
+  /// Restart advertising z nowym boothCode (po zmianie w Settings).
+  Future<void> restartWithCode(String newCode) async {
+    Log.i('NearbyServer', 'restart with new code $newCode (was $_boothCode)');
+    await stop();
+    await start(newCode);
   }
 
   /// Stop - uzywane gdy app goes inactive/dispose.

@@ -27,11 +27,85 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Auto-connect po pierwszej klatce.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Auto-connect po pierwszej klatce + check boothCode.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       context.read<MotorController>().connect();
+      // Jesli brak booth code - pokaz dialog zeby user wpisal.
+      final store = SettingsStore();
+      final code = await store.loadBoothCode();
+      if (!mounted) return;
+      if (code == null || code.length != 4) {
+        await _promptBoothCode(context, store);
+      }
     });
+  }
+
+  /// Pokazuje dialog z polem 4-cyfrowego kodu booth (pobrany ze Station
+  /// Settings). Po save - restart NearbyClient.start() z nowym serviceId.
+  Future<void> _promptBoothCode(BuildContext ctx, SettingsStore store) async {
+    final controller = TextEditingController();
+    final code = await showDialog<String>(
+      context: ctx,
+      barrierDismissible: false,
+      builder: (dCtx) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: const Text('Sparuj z fotobudka',
+            style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Na tablecie Station otworz Ustawienia -> POLACZENIE Z '
+              'RECORDER i wpisz tu 4-cyfrowy kod booth.',
+              style: TextStyle(color: AppTheme.muted, fontSize: 13),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              maxLength: 4,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontFamily: 'monospace',
+                letterSpacing: 8,
+                fontWeight: FontWeight.w800,
+              ),
+              textAlign: TextAlign.center,
+              decoration: const InputDecoration(
+                counterText: '',
+                hintText: '----',
+                hintStyle: TextStyle(
+                    color: AppTheme.muted, letterSpacing: 8),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              final v = controller.text.trim();
+              if (v.length == 4 && int.tryParse(v) != null) {
+                Navigator.of(dCtx).pop(v);
+              }
+            },
+            child: const Text('Sparuj',
+                style: TextStyle(color: AppTheme.primary)),
+          ),
+        ],
+      ),
+    );
+    if (code == null) return;
+    await store.saveBoothCode(code);
+    if (!mounted) return;
+    final client = context.read<NearbyClient>();
+    await client.restartWithCode(code);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Sparowano z kodem $code - szukam Station')),
+    );
   }
 
   @override
@@ -366,7 +440,16 @@ class _StatusColumn extends StatelessWidget {
                   final granted = await NearbyPermissions.requestAll();
                   if (!context.mounted) return;
                   if (granted) {
-                    await n.start();
+                    final code = await SettingsStore().loadBoothCode();
+                    if (!context.mounted) return;
+                    if (code == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Najpierw wpisz kod booth')),
+                      );
+                      return;
+                    }
+                    await n.start(code);
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -390,10 +473,26 @@ class _StatusColumn extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed: () async {
                   Navigator.of(ctx).pop();
-                  await n.start();
+                  final code = await SettingsStore().loadBoothCode();
+                  if (code != null && code.length == 4) {
+                    await n.restartWithCode(code);
+                  }
                 },
                 icon: const Icon(Icons.refresh_rounded, size: 16),
                 label: const Text('Restart discovery'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  Navigator.of(ctx).pop();
+                  final state = context.findAncestorStateOfType<
+                      _HomeScreenState>();
+                  if (state != null) {
+                    await state._promptBoothCode(context, SettingsStore());
+                  }
+                },
+                icon: const Icon(Icons.vpn_key_rounded, size: 16),
+                label: const Text('Zmien kod booth'),
               ),
             ],
           ),

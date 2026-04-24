@@ -60,16 +60,21 @@ Future<void> main() async {
   );
 
   // Po wystartowaniu UI - request permissions, potem start Nearby discovery.
-  // addPostFrameCallback czeka na pierwszy frame zeby dialog pojawil sie
-  // nad zaladowana apka (nie na pustym tle).
+  // Booth code musi byc zapisany w SettingsStore (user wpisal z home_screen
+  // dialogu) - bez kodu discovery nie rusza (nie wiemy kogo szukac).
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     final granted = await NearbyPermissions.requestAll();
-    if (granted) {
-      await nearbyClient.start();
-      debugPrint('[Recorder] Nearby discovery started');
-    } else {
+    if (!granted) {
       debugPrint('[Recorder] Nearby permissions denied - discovery off');
+      return;
     }
+    final code = await store.loadBoothCode();
+    if (code == null) {
+      debugPrint('[Recorder] No booth code - user must enter on home_screen');
+      return;
+    }
+    await nearbyClient.start(code);
+    debugPrint('[Recorder] Nearby discovery started (boothCode=$code)');
   });
 }
 

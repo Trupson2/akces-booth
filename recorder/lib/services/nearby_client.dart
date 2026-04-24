@@ -14,8 +14,13 @@ import '../models/recording_resolution.dart';
 import 'settings_store.dart';
 import 'wire_protocol.dart';
 
-const String _kServiceId = 'pl.akces360.booth.nearby.v1';
+/// Prefix serviceId. Pelny serviceId = `$_kServiceIdPrefix.<boothCode>`.
+/// BoothCode pochodzi z SettingsStore (user wpisal ze Station Settings).
+/// Bez kodu nie uruchamiamy discovery - nie mialibysmy zmapowanego peera.
+const String _kServiceIdPrefix = 'pl.akces360.booth.nearby.v1';
 const String _kDiscovererName = 'AkcesBooth-Recorder';
+
+String _serviceIdFor(String boothCode) => '$_kServiceIdPrefix.$boothCode';
 
 enum NearbyClientState {
   idle,
@@ -56,6 +61,11 @@ class NearbyClient extends ChangeNotifier {
   Timer? _statusTimer;
   String? _docsDir;
 
+  /// Aktualny booth code - pobrany ze [SettingsStore] przy [start].
+  String _boothCode = '';
+  String get boothCode => _boothCode;
+  String get serviceId => _serviceIdFor(_boothCode);
+
   /// Ostatnio odebrany event_config (cache'owany, z juz pobranymi assetami).
   EventConfig? _lastEventConfig;
   EventConfig? get lastEventConfig => _lastEventConfig;
@@ -78,13 +88,25 @@ class NearbyClient extends ChangeNotifier {
   // Lifecycle
   // ------------------------------------------------------------------
 
-  /// Start discovery. Nearby skanuje otoczenie dla Service ID naszej apki.
-  /// Gdy znajdzie - auto-requestConnection, auto-accept po stronie Stationa.
-  Future<void> start() async {
+  /// Start discovery. Nearby skanuje otoczenie dla Service ID naszej apki
+  /// z suffix=boothCode - dopasowuje tylko Station z tym samym kodem.
+  ///
+  /// Zwraca false gdy boothCode jest niepoprawny albo permissions brak.
+  /// User powinien najpierw wpisac kod w home_screen dialogu.
+  Future<bool> start(String boothCode) async {
+    if (boothCode.length != 4) {
+      _setState(NearbyClientState.error,
+          error: 'booth code invalid: "$boothCode"');
+      return false;
+    }
     if (_state == NearbyClientState.discovering ||
         _state == NearbyClientState.connected) {
-      return;
+      if (boothCode == _boothCode) return true; // juz chodzi z tym kodem
+      // Inny kod - restart.
+      await stop();
     }
+    _boothCode = boothCode;
+
     // Pre-populate docsDir dla sync _cachedAssetPath zeby pierwszy event_config
     // po restart'ie mogl od razu uzywac cached overlay (bez czekania na
     // async download i race z user klikajacym record).
@@ -97,21 +119,31 @@ class NearbyClient extends ChangeNotifier {
       final started = await _nearby.startDiscovery(
         _kDiscovererName,
         Strategy.P2P_POINT_TO_POINT,
-        serviceId: _kServiceId,
+        serviceId: serviceId,
         onEndpointFound: _onEndpointFound,
         onEndpointLost: _onEndpointLost,
       );
       if (started) {
         _setState(NearbyClientState.discovering);
-        debugPrint('[NearbyClient] discovering for $_kServiceId');
+        debugPrint('[NearbyClient] discovering for $serviceId');
+        return true;
       } else {
         _setState(NearbyClientState.error,
             error: 'startDiscovery returned false');
+        return false;
       }
     } catch (e, st) {
       debugPrint('[NearbyClient] start failed: $e\n$st');
       _setState(NearbyClientState.error, error: e.toString());
+      return false;
     }
+  }
+
+  /// Restart z nowym kodem (po zmianie w home_screen dialogu).
+  Future<bool> restartWithCode(String newCode) async {
+    debugPrint('[NearbyClient] restart with code $newCode (was $_boothCode)');
+    await stop();
+    return start(newCode);
   }
 
   Future<void> stop() async {
@@ -198,8 +230,12 @@ class NearbyClient extends ChangeNotifier {
     _statusTimer?.cancel();
     _statusTimer = null;
     _setState(NearbyClientState.idle);
-    // Auto-restart discovery - Nearby ponownie znajdzie Tab.
-    Future<void>.delayed(const Duration(seconds: 2), () => start());
+    // Auto-restart discovery z ostatnim boothCode - Nearby ponownie
+    // znajdzie Tab gdy ten sam user wroci na Station.
+    final code = _boothCode;
+    if (code.length == 4) {
+      Future<void>.delayed(const Duration(seconds: 2), () => start(code));
+    }
   }
 
   Future<void> _onPayload(String endpointId, Payload payload) async {
