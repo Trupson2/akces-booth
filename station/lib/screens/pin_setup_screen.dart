@@ -93,6 +93,12 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
         duration: Duration(seconds: 2),
       ),
     );
-    Navigator.of(context).pop(true);
+    // Pop tylko gdy PinSetupScreen byl pushed (closable = zmiana PIN w Settings).
+    // Przy first-setup (closable=false) ekran jest root widget w _Router -
+    // Navigator.pop tam = exit apki / czarny ekran. _Router rebuild (trigger
+    // przez notifyListeners w svc.setPin) zastapi PinSetupScreen IdleScreenem.
+    if (widget.closable && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop(true);
+    }
   }
 }

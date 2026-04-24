@@ -88,12 +88,44 @@ class _RecordingScreenState extends State<RecordingScreen>
       }
       // autoStart: po initialize kamery automatycznie startujemy record.
       if (widget.autoStart && mounted) {
-        // Maly delay zeby UI zdazyl sie odswiezyc i permissions wrocily.
-        await Future<void>.delayed(const Duration(milliseconds: 300));
+        // Delay 600ms zeby:
+        // - UI zdazyl sie odswiezyc
+        // - permissions propagujace sie skoncza
+        // - camera controller finalize po initialize
+        await Future<void>.delayed(const Duration(milliseconds: 600));
         if (!mounted) return;
         final cam = context.read<CameraService>();
-        if (cam.isInitialized && !cam.isRecording) {
+
+        // Defensive: jesli camera ma stale isRecording flag (po niepelnym
+        // stopie z poprzedniego RecordingScreen), force stop i potem start.
+        // Bez tego _toggleRecord robilby stopRecording -> pusty plik.
+        if (cam.isRecording) {
+          debugPrint('[RecordingScreen] autoStart: stale isRecording, '
+              'force cancelRecording first');
+          try {
+            await cam.cancelRecording();
+          } catch (e) {
+            debugPrint('[RecordingScreen] cancelRecording err: $e');
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+          if (!mounted) return;
+        }
+
+        // Spawdzamy init raz jeszcze - niektore urzadzenia potrzebuja
+        // 1-2s po cameraController init.
+        int tries = 0;
+        while (!cam.isInitialized && tries < 10 && mounted) {
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+          tries++;
+        }
+
+        if (cam.isInitialized && !cam.isRecording && mounted) {
+          debugPrint('[RecordingScreen] autoStart -> _toggleRecord');
           _toggleRecord();
+        } else {
+          debugPrint('[RecordingScreen] autoStart SKIP: '
+              'init=${cam.isInitialized} recording=${cam.isRecording} '
+              'mounted=$mounted');
         }
       }
     });
@@ -237,6 +269,29 @@ class _RecordingScreenState extends State<RecordingScreen>
     client.sendRecordingStopped();
 
     if (rawPath == null) return;
+
+    // Guard: bardzo krotkie nagranie (<100KB) = camera nie zapisala klatek
+    // albo user anulowal zbyt szybko. Nie wysylamy pustego pliku do Station
+    // (wtedy PreviewScreen video_player rzuca ExoPlaybackException).
+    final rawSize = await File(rawPath).length();
+    if (rawSize < 100 * 1024) {
+      debugPrint('[RecordingScreen] raw too small ($rawSize B) - '
+          'skipping upload, wracam do home');
+      client.sendError('Nagranie za krotkie ($rawSize B)');
+      try {
+        await File(rawPath).delete();
+      } catch (_) {}
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Nagranie za krotkie - sprobuj jeszcze raz'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        Navigator.of(context).maybePop();
+      }
+      return;
+    }
 
     // Post-processing: losowy template + losowa muzyka.
     String finalPath = rawPath;
