@@ -473,14 +473,52 @@ class _RecordingParamsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Push nowej konfiguracji do Recordera po kazdej zmianie - bez tego
+    // Recorder widzi stara wartosc az do nastepnego syncNow (30s).
+    void pushConfig() {
+      try {
+        context.read<EventManager>().pushRecorderConfig();
+      } catch (e) {
+        debugPrint('[Settings] pushRecorderConfig fail: $e');
+      }
+    }
+    Future<void> setDuration(int s) async {
+      await settings.setVideoDuration(s);
+      pushConfig();
+    }
+    Future<void> setResolution(String v) async {
+      await settings.setResolution(v);
+      pushConfig();
+    }
+    Future<void> setZoom(double v) async {
+      await settings.setZoomLevel(v);
+      pushConfig();
+    }
+    Future<void> setStabilize(bool v) async {
+      await settings.setStabilize(v);
+      pushConfig();
+    }
+    Future<void> setSlowmo(double v) async {
+      await settings.setSlowMoFactor(v);
+      pushConfig();
+    }
+    Future<void> setRotDir(String v) async {
+      await settings.setRotationDir(v);
+      pushConfig();
+    }
+    Future<void> setRotSpeed(int v) async {
+      await settings.setRotationSpeed(v);
+      pushConfig();
+    }
+
     return _Section(
       title: '⚙️ PARAMETRY NAGRYWANIA',
       children: [
         _StepperRow(
           label: 'Dlugosc filmu',
           value: '${settings.videoDurationSec}s',
-          onMinus: () => settings.setVideoDuration(settings.videoDurationSec - 1),
-          onPlus: () => settings.setVideoDuration(settings.videoDurationSec + 1),
+          onMinus: () => setDuration(settings.videoDurationSec - 1),
+          onPlus: () => setDuration(settings.videoDurationSec + 1),
         ),
         _DropdownRow<String>(
           label: 'Rozdzielczosc',
@@ -489,7 +527,7 @@ class _RecordingParamsSection extends StatelessWidget {
             ('fullHd', 'Full HD 1080p (szybko)'),
             ('uhd4k', '4K (wolniej, premium)'),
           ],
-          onChanged: (v) => settings.setResolution(v),
+          onChanged: setResolution,
         ),
         _DropdownRow<double>(
           label: 'Zoom',
@@ -499,13 +537,13 @@ class _RecordingParamsSection extends StatelessWidget {
             (1.0, '1.0x (normalny)'),
             (2.0, '2.0x (tele, blizej)'),
           ],
-          onChanged: (v) => settings.setZoomLevel(v),
+          onChanged: setZoom,
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,
           value: settings.stabilize,
-          onChanged: (v) => settings.setStabilize(v),
+          onChanged: setStabilize,
           activeThumbColor: AppTheme.primary,
           title: const Text('Stabilizacja wideo (post-process)',
               style: TextStyle(color: Colors.white, fontSize: 14)),
@@ -522,7 +560,7 @@ class _RecordingParamsSection extends StatelessWidget {
             (2.0, '2x'),
             (4.0, '4x'),
           ],
-          onChanged: (v) => settings.setSlowMoFactor(v),
+          onChanged: setSlowmo,
         ),
         _DropdownRow<String>(
           label: 'Kierunek obrotu',
@@ -532,13 +570,13 @@ class _RecordingParamsSection extends StatelessWidget {
             ('ccw', 'W lewo'),
             ('mixed', 'Zmienny'),
           ],
-          onChanged: (v) => settings.setRotationDir(v),
+          onChanged: setRotDir,
         ),
         _StepperRow(
           label: 'Predkosc obrotu',
           value: '${settings.rotationSpeed}/10',
-          onMinus: () => settings.setRotationSpeed(settings.rotationSpeed - 1),
-          onPlus: () => settings.setRotationSpeed(settings.rotationSpeed + 1),
+          onMinus: () => setRotSpeed(settings.rotationSpeed - 1),
+          onPlus: () => setRotSpeed(settings.rotationSpeed + 1),
         ),
         const SizedBox(height: 6),
         SwitchListTile(
