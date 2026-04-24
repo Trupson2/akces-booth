@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'logger.dart';
+import 'wire_protocol.dart';
 
 /// Service ID - unikalny identyfikator naszej apki.
 /// Zmien suffix na `.v2` przy zmianie protokolu wymagajacej reinstall.
@@ -31,15 +32,19 @@ enum NearbyConnState {
 /// Recorder (Discoverer) znajduje i wysyla connection request. Auto-accept
 /// bo to trusted device (jedna para Tab+OP13 per booth).
 ///
-/// API ksztaltem naslladuje stary `LocalServer`:
+/// API ksztaltem naslladuje stary `LocalServer` zeby Etap 3 byl swap
+/// a nie refaktor wyzej:
 /// - `sendToRecorder(Map<String,dynamic>)` - broadcast JSON bytes do peera
-/// - `onBytesReceived` / `onFileReceived` - callbacki dla wiadomosci
-/// - `onRecorderConnect` / `onRecorderDisconnect` - lifecycle
+/// - `onRecordingStarted/Stopped`, `onProcessingProgress/Done`,
+///   `onUploadProgress`, `onRemoteError` - typed callbacks jak w LocalServer
+/// - `onBytesReceived` - generic callback dla nieznanych typow (debugowanie)
+/// - `onFileReceived(filename, path, bytes)` - po file transfer (Etap 3)
+/// - Status tracking: `lastRecorderBattery`, `lastRecorderDiskFreeGb`
 ///
 /// Notes:
 /// - Nearby.endpointId to ID per-session (nie trwale), ale mamy 1 peera
 ///   wiec trackujemy po prostu `_connectedEndpointId`.
-/// - sendFilePayload uzywa auto-upgrade do WiFi Direct dla dużych plików;
+/// - sendFilePayload uzywa auto-upgrade do WiFi Direct dla dużych plikow;
 ///   dla bytes zostaje BT (LTE wystarcza).
 class NearbyServer extends ChangeNotifier {
   NearbyServer();
@@ -50,8 +55,13 @@ class NearbyServer extends ChangeNotifier {
   String? _connectedEndpointId;
   String? _lastError;
 
-  /// Callback dla przychodzacych wiadomosci JSON (bytes payload).
-  void Function(Map<String, dynamic> msg)? onBytesReceived;
+  /// Ostatnio zaraportowane przez Recorder (komunikat `recorder_status`).
+  /// Null = jeszcze nic nie dotarlo.
+  int? _lastRecorderBattery;
+  double? _lastRecorderDiskFreeGb;
+
+  int? get lastRecorderBattery => _lastRecorderBattery;
+  double? get lastRecorderDiskFreeGb => _lastRecorderDiskFreeGb;
 
   /// Callback gdy Recorder (re)connects - use do push event_config od razu.
   void Function()? onRecorderConnect;
@@ -59,8 +69,28 @@ class NearbyServer extends ChangeNotifier {
   /// Callback przy disconnect.
   void Function()? onRecorderDisconnect;
 
+  /// Typed callbacks - mirror starego LocalServer (AppStateMachine podpina).
+  void Function()? onRecordingStarted;
+  void Function(double progress)? onRecordingProgress;
+  void Function()? onRecordingStopped;
+  void Function(double progress)? onProcessingProgress;
+  void Function()? onProcessingDone;
+  void Function(double progress)? onUploadProgress;
+  void Function(String message)? onRemoteError;
+
+  /// Generic fallback dla nieznanych typow (diagnostyka) - optional.
+  void Function(Map<String, dynamic> msg)? onBytesReceived;
+
   /// Callback gdy plik przesylany (filename, filePath lokalny, size).
+  /// Etap 3: wywolywany po SUCCESS z _onPayloadUpdate i przenoszeniu
+  /// pliku do `received/`. Mirror LocalServer.onVideoReceived.
   void Function(String filename, String path, int bytes)? onFileReceived;
+
+  /// Ostatnio zakomunikowany "prekursor" dla file transfer (short_name, size).
+  /// Po SUCCESS payload FILE - kojarzymy z tym prekursorem.
+  /// Uzupelniane w Etap 3.
+  String? _pendingFileShortName;
+  int? _pendingFileSize;
 
   /// Stan widoczny dla UI (idle/advertising/connected).
   NearbyConnState get state => _state;
@@ -168,7 +198,7 @@ class NearbyServer extends ChangeNotifier {
         if (bytes == null) return;
         final str = utf8.decode(bytes);
         final msg = jsonDecode(str) as Map<String, dynamic>;
-        onBytesReceived?.call(msg);
+        _handleMessage(msg);
       } catch (e) {
         Log.w('NearbyServer', 'bytes parse fail: $e');
       }
@@ -179,6 +209,69 @@ class NearbyServer extends ChangeNotifier {
     }
   }
 
+  /// Routing wiadomosci z Recorder - mirror LocalServer._onMessage.
+  /// Dispatch do typed callbacks; nieznane typy -> onBytesReceived fallback.
+  void _handleMessage(Map<String, dynamic> msg) {
+    final type = msg['type'] as String?;
+    switch (type) {
+      case WireMsg.recorderStatus:
+        final battery = msg['battery'];
+        final disk = msg['disk_free_gb'];
+        if (battery is num) _lastRecorderBattery = battery.toInt();
+        if (disk is num) _lastRecorderDiskFreeGb = disk.toDouble();
+        notifyListeners();
+        break;
+      case WireMsg.recordingStarted:
+        onRecordingStarted?.call();
+        break;
+      case WireMsg.recordingProgress:
+        final p = msg['progress'];
+        if (p is num) onRecordingProgress?.call(p.toDouble());
+        break;
+      case WireMsg.recordingStopped:
+        onRecordingStopped?.call();
+        break;
+      case WireMsg.processingProgress:
+        final p = msg['progress'];
+        if (p is num) onProcessingProgress?.call(p.toDouble());
+        break;
+      case WireMsg.processingDone:
+        onProcessingDone?.call();
+        break;
+      case WireMsg.uploadProgress:
+        final p = msg['progress'];
+        if (p is num) onUploadProgress?.call(p.toDouble());
+        break;
+      case WireMsg.error:
+        onRemoteError?.call(msg['message']?.toString() ?? 'Unknown error');
+        break;
+      case WireMsg.pong:
+        // Nearby ma wewnetrzny keepalive wiec pong legacy, ignorujemy.
+        break;
+      case WireMsg.ping:
+        // Legacy - zachowujemy ze odsylamy pong, ale Nearby keepalive
+        // robi to za nas. W Etap 3 Recorder juz nie bedzie wysylal.
+        sendToRecorder({'type': WireMsg.pong});
+        break;
+      case 'file_incoming':
+        // Prekursor przed sendFilePayload - zapisujemy kontekst dla
+        // _onPayloadUpdate SUCCESS (Etap 3 pelna obsluga).
+        _pendingFileShortName = msg['short_name']?.toString();
+        final size = msg['size'];
+        _pendingFileSize = size is num ? size.toInt() : null;
+        Log.d('NearbyServer', 'file_incoming '
+            '${_pendingFileShortName} (${_pendingFileSize}B)');
+        break;
+      default:
+        debugPrint('[NearbyServer] Unknown msg type: $type');
+        try {
+          onBytesReceived?.call(msg);
+        } catch (e) {
+          debugPrint('[NearbyServer] onBytesReceived cb err: $e');
+        }
+    }
+  }
+
   Future<void> _onPayloadUpdate(
       String endpointId, PayloadTransferUpdate update) async {
     // Nearby przenosi plik do temp path. Po SUCCESS musimy go przeniesc
@@ -186,11 +279,16 @@ class NearbyServer extends ChangeNotifier {
     if (update.status == PayloadStatus.SUCCESS) {
       Log.i('NearbyServer',
           'payload ${update.id} SUCCESS (${update.bytesTransferred}B)');
-      // TODO: plik payload - musimy mapowac update.id -> prekursor msg
-      // (onBytesReceived przed uploadem dostal {type: file_incoming,
-      // payload_id: X, short_name: Y}) i przeniesc plik do docs/received/.
+      // TODO(Etap 3): plik payload - przeniesc z temp do received/,
+      // wywolac onFileReceived(filename, path, bytes). Na razie zapisujemy
+      // _pendingFileShortName/_pendingFileSize w _handleMessage (file_incoming
+      // prekursor) i zostawiamy pelna logike dla Etap 3.
+      _pendingFileShortName = null;
+      _pendingFileSize = null;
     } else if (update.status == PayloadStatus.FAILURE) {
       Log.w('NearbyServer', 'payload ${update.id} FAILURE');
+      _pendingFileShortName = null;
+      _pendingFileSize = null;
     }
   }
 
