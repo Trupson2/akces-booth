@@ -126,10 +126,36 @@ OP13 (Recorder) start:
 
 ## Timeline
 
-- Etap 1 (dzisiaj): exploration + design (ten doc) + package w pubspec
-- Etap 2 (~2 dni): NearbyServer + NearbyClient classes, bytes messaging
-- Etap 3 (~2 dni): File transfer integration, replace HTTP upload
-- Etap 4 (~1 dzień): Permissions UX + pairing UI
-- Etap 5 (~1 dzień): E2E test z fotobudką dziadka
+- [x] Etap 1 (2026-04-24): exploration + design (ten doc) + package w pubspec
+  — commit `0bf4b26 feat(nearby): Etap 1`
+- [x] Etap 2 (2026-04-24): NearbyServer + NearbyClient classes, bytes messaging
+  — commit `eca838a feat(nearby): Etap 2 - bytes messaging drop-in API`
+  - EventConfig DTO wydzielone do `recorder/lib/models/event_config.dart`
+  - NearbyClient: typed EventConfig, asset download, status push timer,
+    settings param apply
+  - NearbyServer: typed callbacks, status tracking, internal routing
+- [x] Etap 3 (2026-04-24): File transfer integration, replace HTTP upload
+  — commit `c1ba471 feat(nearby): Etap 3 - integracja + file transfer`
+  - Full file transfer: prekursor FIFO + payload.id->temp map + rename
+    do received/<short_name>, fallback copy+delete
+  - AppStateMachine + EventManager swapped: LocalServer->NearbyServer
+  - Recorder: StationClient->NearbyClient, uploadVideo->sendFileToStation
+  - DELETE station_client.dart + station_setup_screen.dart
+  - LocalServer okrojony do HTTP /local/<short_id> (offline QR fallback)
+- [x] Etap 4 (2026-04-24): Permissions UX + pairing UI
+  — commit `e80995a feat(nearby): Etap 4 - permissions UX`
+  - NearbyPermissions helper: hasAll / requestAll / anyPermanentlyDenied
+    / openSystemSettings. Zaada bluetoothAdvertise/Connect/Scan,
+    locationWhenInUse, nearbyWifiDevices w jednym dialogu
+  - main.dart (oba): post-frame callback: requestAll() -> nearby.start()
+  - UI: Station settings button, Recorder home bottom sheet (Sprawdz
+    permissions + Restart discovery)
+  - Pubspec cleanup: web_socket_channel, shelf_web_socket usuniete
+- [ ] Etap 5 (~1 dzień): E2E test z fotobudką dziadka
+  - Pairing test w RS: Tab advertising + OP13 discovery -> widzi sie <10s
+  - Bytes roundtrip: Tab->event_config->OP13, OP13->recorder_status->Tab
+  - File transfer: OP13->30MB MP4->Tab, received/ zawiera plik
+  - Disconnect/reconnect: wyl Tab WiFi, Nearby upgrade via BT
+  - Battery: 2h idle + 10 nagran
 
 ~7-10 h roboczych, termin 13.06 Ola = 7 tyg, zdążymy z testami.
