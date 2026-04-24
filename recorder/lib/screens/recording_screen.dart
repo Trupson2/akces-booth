@@ -307,15 +307,15 @@ class _RecordingScreenState extends State<RecordingScreen>
         ...musicLib.availablePaths,
       ];
 
-      // Tylko fastSlowFast (2026-04-23 feedback):
-      // - classicBoomerang / freezeReverse WYJEBANE: robily reverse =
-      //   "chodzi w tyl" gdy tancerka schodzi, dziwny efekt.
-      // - slowCinematic WYJEBANE: slowmo na CALYM filmiku - user: "efekt
-      //   spowalnienia jest na caly filmik".
-      // - fastSlowFast: 3 segmenty - szybki intro + normal + slowmo finale.
-      //   Slow-mo TYLKO na ostatnich 30% = "dramatyczna klatka" zamiast
-      //   ciagnacego sie slow-mo. Single template = predictable output.
+      // Templates z reverse na koncu (2026-04-24 user feedback po pierwszym
+      // tescie na prawdziwej fotobudce - user chce "efekt wracania na koncu"):
+      // - classicBoomerang: forward -> reverse -> slow-mo tail (oryginalny)
+      // - freezeReverse: forward -> freeze 0.5s -> reverse -> slow tail
+      // - fastSlowFast: szybki start -> normal -> slow finale (bez reverse)
+      // slowCinematic pominiety - slowmo na calym filmiku zjada dynamike.
       const spinTemplates = <EffectTemplate>[
+        EffectTemplate.classicBoomerang,
+        EffectTemplate.freezeReverse,
         EffectTemplate.fastSlowFast,
       ];
       final params = picker.pick(
