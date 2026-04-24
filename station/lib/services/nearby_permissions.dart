@@ -44,19 +44,30 @@ class NearbyPermissions {
   ///
   /// Jesli user kliknie "Dont ask again" albo jest juz permanent-denied,
   /// dialog sie nie pokaze - uzyj [openSystemSettings] zeby reczenie dojsc.
+  ///
+  /// Race guard: retry do 3 prob jesli inny request permissions jest
+  /// rownolegly aktywny (PlatformException "already running").
   static Future<bool> requestAll() async {
-    try {
-      final statuses = await _required.request();
-      final allGranted = statuses.values.every(
-        (s) => s.isGranted || s.isLimited,
-      );
-      debugPrint('[NearbyPermissions] requestAll -> granted=$allGranted '
-          'statuses=$statuses');
-      return allGranted;
-    } catch (e) {
-      debugPrint('[NearbyPermissions] requestAll error: $e');
-      return false;
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      try {
+        final statuses = await _required.request();
+        final allGranted = statuses.values.every(
+          (s) => s.isGranted || s.isLimited,
+        );
+        debugPrint('[NearbyPermissions] requestAll -> granted=$allGranted '
+            '(attempt $attempt) statuses=$statuses');
+        return allGranted;
+      } catch (e) {
+        final isRace = e.toString().contains('already running');
+        debugPrint('[NearbyPermissions] requestAll error (attempt $attempt): $e');
+        if (isRace && attempt < 3) {
+          await Future<void>.delayed(const Duration(milliseconds: 800));
+          continue;
+        }
+        return false;
+      }
     }
+    return false;
   }
 
   /// True gdy przynajmniej jedna z wymaganych permissions jest

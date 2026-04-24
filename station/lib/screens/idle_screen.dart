@@ -99,16 +99,26 @@ class IdleScreen extends StatelessWidget {
                   const SizedBox(height: 8),
 
                   // Duzy START tuz pod greeting, bez rozciagania Spacer'em.
+                  // Disabled dopoki Recorder nie sparowany - inaczej user
+                  // klika i wchodzi w mock mode bez przesylki filmu.
                   LayoutBuilder(
                     builder: (context, _) {
                       final screenH = MediaQuery.of(context).size.height;
                       final btnH = (screenH * 0.18).clamp(80.0, 140.0);
+                      final ready = nearby.isRecorderConnected;
                       return BigActionButton(
-                        label: 'START NAGRANIA',
-                        subtitle: 'albo nacisnij pilota',
-                        icon: Icons.play_arrow_rounded,
-                        color: AppTheme.success,
+                        label: ready
+                            ? 'START NAGRANIA'
+                            : 'CZEKAM NA FOTOBUDKE...',
+                        subtitle: ready
+                            ? 'albo nacisnij pilota'
+                            : 'uruchom apke na OnePlus i wpisz kod booth',
+                        icon: ready
+                            ? Icons.play_arrow_rounded
+                            : Icons.phonelink_off_rounded,
+                        color: ready ? AppTheme.success : AppTheme.muted,
                         height: btnH,
+                        disabled: !ready,
                         onTap: () => sm.startRecording(),
                       );
                     },

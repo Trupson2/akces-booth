@@ -44,10 +44,12 @@ class SettingsStore {
   Future<RecordingMode> loadMode() async {
     final p = await _get();
     final raw = p.getString(_kMode);
-    if (raw == null) return RecordingMode.normal;
+    // Default 60 fps - user zgłosił że 30 fps za malo klatkaz dla
+    // boomeranga (szarpane po slowmo). 60 fps = plynne nawet po 3x slow.
+    if (raw == null) return RecordingMode.fps60;
     return RecordingMode.values.firstWhere(
       (e) => e.name == raw,
-      orElse: () => RecordingMode.normal,
+      orElse: () => RecordingMode.fps60,
     );
   }
 

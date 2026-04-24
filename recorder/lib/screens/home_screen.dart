@@ -28,10 +28,19 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     // Auto-connect po pierwszej klatce + check boothCode.
+    //
+    // UWAGA race: main.dart post-frame callback woła NearbyPermissions.requestAll
+    // rownolegle. MotorController.connect tez zada BT permissions. Plugin
+    // permission_handler rzuca PlatformException gdy dwa requesty naraz.
+    // Delay 1.5s daje Nearby permissions szanse skonczyc przed motor BLE.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      context.read<MotorController>().connect();
-      // Jesli brak booth code - pokaz dialog zeby user wpisal.
+      // Motor.connect po delayu zeby uniknac kolizji z Nearby permissions.
+      Future<void>.delayed(const Duration(milliseconds: 1500), () {
+        if (!mounted) return;
+        context.read<MotorController>().connect();
+      });
+      // Dialog kodu booth moze isc rownolegle - nie zada permissions.
       final store = SettingsStore();
       final code = await store.loadBoothCode();
       if (!mounted) return;
@@ -100,11 +109,24 @@ class _HomeScreenState extends State<HomeScreen> {
     if (code == null) return;
     await store.saveBoothCode(code);
     if (!mounted) return;
+    // Permissions moga byc jeszcze nie granted gdy user wpisal kod
+    // (system dialog zostal skipniety/odlozony). Request przed start,
+    // inaczej startDiscovery fail i user bedzie musial zrestartowac apke.
+    final granted = await NearbyPermissions.requestAll();
+    if (!mounted) return;
+    if (!granted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bluetooth/Location permission odrzucone')),
+      );
+      return;
+    }
     final client = context.read<NearbyClient>();
-    await client.restartWithCode(code);
+    final ok = await client.restartWithCode(code);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Sparowano z kodem $code - szukam Station')),
+      SnackBar(content: Text(ok
+          ? 'Sparowano z kodem $code - szukam Station'
+          : 'Blad startu discovery - sprobuj ponownie (restart apki)')),
     );
   }
 

@@ -115,28 +115,44 @@ class NearbyClient extends ChangeNotifier {
       _docsDir = dir.path;
     } catch (_) {}
 
-    try {
-      final started = await _nearby.startDiscovery(
-        _kDiscovererName,
-        Strategy.P2P_POINT_TO_POINT,
-        serviceId: serviceId,
-        onEndpointFound: _onEndpointFound,
-        onEndpointLost: _onEndpointLost,
-      );
-      if (started) {
-        _setState(NearbyClientState.discovering);
-        debugPrint('[NearbyClient] discovering for $serviceId');
-        return true;
-      } else {
-        _setState(NearbyClientState.error,
-            error: 'startDiscovery returned false');
+    // Retry - pierwsze wywolanie po permission grant czasem zwraca false
+    // bo plugin native side jeszcze nie ma Location services signalled.
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      try {
+        final started = await _nearby.startDiscovery(
+          _kDiscovererName,
+          Strategy.P2P_POINT_TO_POINT,
+          serviceId: serviceId,
+          onEndpointFound: _onEndpointFound,
+          onEndpointLost: _onEndpointLost,
+        );
+        if (started) {
+          _setState(NearbyClientState.discovering);
+          debugPrint('[NearbyClient] discovering for $serviceId '
+              '(attempt $attempt)');
+          return true;
+        } else {
+          debugPrint('[NearbyClient] startDiscovery returned false '
+              '(attempt $attempt/3)');
+          if (attempt < 3) {
+            await Future<void>.delayed(const Duration(milliseconds: 500));
+            continue;
+          }
+          _setState(NearbyClientState.error,
+              error: 'startDiscovery returned false po 3 probach');
+          return false;
+        }
+      } catch (e, st) {
+        debugPrint('[NearbyClient] start failed (attempt $attempt): $e\n$st');
+        if (attempt < 3) {
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+          continue;
+        }
+        _setState(NearbyClientState.error, error: e.toString());
         return false;
       }
-    } catch (e, st) {
-      debugPrint('[NearbyClient] start failed: $e\n$st');
-      _setState(NearbyClientState.error, error: e.toString());
-      return false;
     }
+    return false;
   }
 
   /// Restart z nowym kodem (po zmianie w home_screen dialogu).
@@ -492,26 +508,94 @@ class NearbyClient extends ChangeNotifier {
     }
   }
 
-  /// Wysyla plik (MP4) do Stationa. Nearby auto-upgrade'uje do WiFi Direct
-  /// dla duzych plikow. Zwraca true gdy callback SUCCESS, false na FAILURE.
+  /// Wysyla plik (MP4) do Stationa chunkowany na BYTES payloady ~28KB.
   ///
-  /// TODO(Etap 3): track SUCCESS via _onPayloadUpdate (payloadId -> completer),
-  /// na razie fire-and-forget.
+  /// Background: `sendFilePayload` + uri content resolver wydawalo sie
+  /// dzialac, ale po pierwszym chunku 64KB transfer zacinal sie bez SUCCESS
+  /// (plugin bug albo problem z ENCRYPTED_WIFI_LAN medium upgrade dla
+  /// dużych plików). BYTES chunki chodza niezawodnie przez ten sam link.
+  ///
+  /// Protokol:
+  /// 1. JSON `file_chunk_start {short_name, total_size, total_chunks}`
+  /// 2. Binary BYTES: `CHNK` (4) + index uint32 BE (4) + total uint32 BE (4)
+  ///                  + raw chunk data (reszta)
+  /// 3. JSON `file_chunk_done {short_name}`
+  static const int _kChunkSize = 28000; // <32767 (Nearby BYTES limit)
+
   Future<bool> sendFileToStation(File file, {String? shortName}) async {
     final id = _connectedEndpointId;
-    if (id == null || !file.existsSync()) return false;
+    final name = shortName ?? 'video.mp4';
+    if (id == null) {
+      debugPrint('[NearbyClient] sendFile SKIP: no peer connected');
+      return false;
+    }
+    if (!file.existsSync()) {
+      debugPrint('[NearbyClient] sendFile SKIP: file missing ${file.path}');
+      return false;
+    }
+    final bytes = await file.readAsBytes();
+    final totalSize = bytes.length;
+    final totalChunks = (totalSize + _kChunkSize - 1) ~/ _kChunkSize;
+    debugPrint('[NearbyClient] sendFile START name=$name size=$totalSize '
+        'chunks=$totalChunks');
+
     try {
-      // Prekursor bytes - Station wie co za plik przychodzi.
+      // 1) Prekursor JSON - Station szykuje buffer + oczekuje chunkow.
       await sendToStation({
-        'type': 'file_incoming',
-        'short_name': shortName ?? 'video.mp4',
-        'size': file.lengthSync(),
+        'type': 'file_chunk_start',
+        'short_name': name,
+        'total_size': totalSize,
+        'total_chunks': totalChunks,
       });
-      final payload = await _nearby.sendFilePayload(id, file.path);
-      debugPrint('[NearbyClient] file payload id=$payload');
+
+      // 2) Chunki binary (BYTES). Wysylamy sekwencyjnie z malym delay co
+      // kilka chunkow zeby nie przeciazyc plugin queue (crash risk).
+      for (int i = 0; i < totalChunks; i++) {
+        final off = i * _kChunkSize;
+        final end = (off + _kChunkSize < totalSize) ? off + _kChunkSize : totalSize;
+        final chunkData = bytes.sublist(off, end);
+        final packet = Uint8List(12 + chunkData.length);
+        // Marker 'CHNK'
+        packet[0] = 0x43; packet[1] = 0x48; packet[2] = 0x4E; packet[3] = 0x4B;
+        // Index uint32 BE
+        packet[4] = (i >> 24) & 0xFF;
+        packet[5] = (i >> 16) & 0xFF;
+        packet[6] = (i >> 8) & 0xFF;
+        packet[7] = i & 0xFF;
+        // Total uint32 BE
+        packet[8] = (totalChunks >> 24) & 0xFF;
+        packet[9] = (totalChunks >> 16) & 0xFF;
+        packet[10] = (totalChunks >> 8) & 0xFF;
+        packet[11] = totalChunks & 0xFF;
+        // Data
+        packet.setRange(12, 12 + chunkData.length, chunkData);
+
+        await _nearby.sendBytesPayload(id, packet);
+
+        // Progress co 10% albo co 20 chunkow
+        if (i > 0 && (i % 20 == 0 || i == totalChunks - 1)) {
+          final progress = (i + 1) / totalChunks;
+          debugPrint('[NearbyClient] sendFile chunk ${i + 1}/$totalChunks '
+              '(${(progress * 100).toStringAsFixed(0)}%)');
+          sendUploadProgress(progress);
+        }
+
+        // Oddech dla plugin queue - co 10 chunkow 5ms pauzy.
+        if (i % 10 == 9) {
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+        }
+      }
+
+      // 3) Finalizacja - Station flush'uje buffer do pliku.
+      await sendToStation({
+        'type': 'file_chunk_done',
+        'short_name': name,
+      });
+
+      debugPrint('[NearbyClient] sendFile DONE $totalChunks chunks sent');
       return true;
-    } catch (e) {
-      debugPrint('[NearbyClient] sendFile fail: $e');
+    } catch (e, st) {
+      debugPrint('[NearbyClient] sendFile FAIL: $e\n$st');
       return false;
     }
   }

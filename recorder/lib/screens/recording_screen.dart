@@ -136,16 +136,17 @@ class _RecordingScreenState extends State<RecordingScreen>
     // odpali context.read na disposed widgecie = Null check crash apki.
     _stationClient?.onStartRequested = null;
     _stationClient?.onStopRequested = null;
-    // Ponownie zainstaluj globalny handler w app.dart zeby start ze Station
-    // otworzyl nowy RecordingScreen z autoStart. mounted=false w dispose
-    // wiec uzywamy zcachowanego contextu z initState.
-    final ctx = _cachedContext;
-    if (ctx != null) {
+    // Ponownie zainstaluj globalny handler z root navigator context zeby
+    // drugi start_recording ze Station otworzyl nowy RecordingScreen.
+    // _cachedContext z initState moze byc juz disposed (jak RecordingScreen
+    // zostal popped z navigatora) - wtedy context.read rzuca i handler
+    // nigdy sie nie reinstaluje -> drugie nagranie nie rusza.
+    final rootCtx = rootNavigatorKey.currentContext;
+    if (rootCtx != null) {
       try {
-        installGlobalStartHandler(ctx);
-      } catch (_) {
-        // ctx moze byc disposed - OK, globalny handler zostanie przywrocony
-        // przy nastepnym buildzie HomeScreen.
+        installGlobalStartHandler(rootCtx);
+      } catch (e) {
+        debugPrint('[RecordingScreen] reinstall handler err: $e');
       }
     }
     context.read<CameraService>().removeListener(_onCameraChange);

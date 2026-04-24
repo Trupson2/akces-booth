@@ -35,7 +35,7 @@ class CameraService extends ChangeNotifier {
   CameraDescription? _backCamera;
 
   CameraInitStatus _status = CameraInitStatus.idle;
-  RecordingMode _mode = RecordingMode.normal;
+  RecordingMode _mode = RecordingMode.fps60;
   RecordingResolution _resolution = RecordingResolution.fullHd;
   double _zoomLevel = 1.0;
   bool _isRecording = false;

@@ -26,18 +26,31 @@ class NearbyPermissions {
   }
 
   static Future<bool> requestAll() async {
-    try {
-      final statuses = await _required.request();
-      final allGranted = statuses.values.every(
-        (s) => s.isGranted || s.isLimited,
-      );
-      debugPrint('[NearbyPermissions] requestAll -> granted=$allGranted '
-          'statuses=$statuses');
-      return allGranted;
-    } catch (e) {
-      debugPrint('[NearbyPermissions] requestAll error: $e');
-      return false;
+    // Race guard: plugin permission_handler rzuca PlatformException gdy
+    // drugi request wystartuje podczas aktywnego (np. MotorController BT
+    // perms + NearbyPermissions w tym samym post-frame callback). Retry
+    // z delayem rozwiazuje bez user-visible bledu.
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      try {
+        final statuses = await _required.request();
+        final allGranted = statuses.values.every(
+          (s) => s.isGranted || s.isLimited,
+        );
+        debugPrint('[NearbyPermissions] requestAll -> granted=$allGranted '
+            '(attempt $attempt) statuses=$statuses');
+        return allGranted;
+      } catch (e) {
+        final msg = e.toString();
+        final isRace = msg.contains('already running');
+        debugPrint('[NearbyPermissions] requestAll error (attempt $attempt): $e');
+        if (isRace && attempt < 3) {
+          await Future<void>.delayed(const Duration(milliseconds: 800));
+          continue;
+        }
+        return false;
+      }
     }
+    return false;
   }
 
   static Future<bool> anyPermanentlyDenied() async {
