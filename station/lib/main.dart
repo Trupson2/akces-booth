@@ -16,6 +16,7 @@ import 'services/nearby_server.dart';
 import 'services/pending_uploads.dart';
 import 'services/pin_service.dart';
 import 'services/settings_store.dart';
+import 'services/shutter_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -108,6 +109,25 @@ Future<void> main() async {
       Log.w('Station', 'Nearby permissions denied - advertising off '
           '(Settings -> POLACZENIE -> przycisk Permissions)');
     }
+
+    // BT shutter listener - klik pilota (HID keyboard sparowany z Tabem)
+    // triggeruje startRecording. Guard: tylko gdy Recorder connected
+    // i state = idle, zeby nie wywalic recordingu w trakcie.
+    ShutterService(
+      onTrigger: () {
+        if (!nearby.isRecorderConnected) {
+          Log.w('Station', 'shutter click ignored: no peer');
+          return;
+        }
+        if (stateMachine.state.name != 'idle') {
+          Log.w('Station', 'shutter click ignored: state='
+              '${stateMachine.state.name}');
+          return;
+        }
+        Log.i('Station', 'shutter click -> startRecording');
+        stateMachine.startRecording();
+      },
+    ).start();
   });
 }
 
