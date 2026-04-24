@@ -275,3 +275,20 @@ def delete_video_route(video_id: int):  # type: ignore[no-untyped-def]
     if event_id:
         return redirect(url_for("admin.event_edit", event_id=event_id))
     return redirect(url_for("admin.dashboard"))
+
+
+@admin_bp.route("/events/<int:event_id>/videos/delete-all", methods=["POST"])
+@require_admin
+def delete_all_videos_route(event_id: int):  # type: ignore[no-untyped-def]
+    """Usuwa WSZYSTKIE filmy z eventu (DB + pliki). Bulk operation."""
+    result = models.delete_all_videos_for_event(Config.DB_PATH, event_id)
+    deleted = result.get("deleted", 0)
+    failed = result.get("failed_files", 0)
+    if deleted == 0:
+        flash("Brak filmow do usuniecia.", "ok")
+    else:
+        msg = f"Usunieto {deleted} film(ow) z eventu."
+        if failed:
+            msg += f" Uwaga: {failed} plik(ow) nie dalo sie skasowac (juz nie istnial?)."
+        flash(msg, "ok")
+    return redirect(url_for("admin.event_edit", event_id=event_id))

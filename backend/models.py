@@ -393,6 +393,39 @@ def delete_video(db_path: Path, video_id: int) -> dict[str, Any] | None:
     return record
 
 
+def delete_all_videos_for_event(
+    db_path: Path, event_id: int
+) -> dict[str, int]:
+    """Usuwa WSZYSTKIE filmy z danego eventu (DB + pliki).
+
+    Zwraca:
+        {"deleted": N, "failed_files": M} - N rzedow z DB usunietych,
+        M z ich byly plikami ktore nie dalo sie usunac (log na zewnatrz).
+    """
+    import os as _os
+    with get_conn(db_path) as conn:
+        rows = conn.execute(
+            "SELECT * FROM videos WHERE event_id=?", (event_id,)
+        ).fetchall()
+        records = [dict(r) for r in rows]
+        conn.execute("DELETE FROM videos WHERE event_id=?", (event_id,))
+
+    failed = 0
+    for rec in records:
+        try:
+            fp = rec.get("file_path")
+            if fp:
+                p = Path(fp)
+                if not p.is_absolute():
+                    from config import Config  # noqa: WPS433
+                    p = Config.BASE_DIR / p
+                if p.exists():
+                    _os.unlink(p)
+        except Exception:
+            failed += 1
+    return {"deleted": len(records), "failed_files": failed}
+
+
 def increment_view_count(db_path: Path, video_id: int) -> None:
     with get_conn(db_path) as conn:
         conn.execute(

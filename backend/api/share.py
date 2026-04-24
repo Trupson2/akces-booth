@@ -7,7 +7,7 @@ from pathlib import Path
 
 import qrcode
 from flask import (
-    Blueprint, abort, render_template, send_file, send_from_directory,
+    Blueprint, abort, render_template, request, send_file, send_from_directory,
 )
 from qrcode.constants import ERROR_CORRECT_H
 
@@ -94,6 +94,66 @@ def download_video(short_id: str):  # type: ignore[no-untyped-def]
         as_attachment=True,
         download_name=f"akces_booth_{short_id}.mp4",
         mimetype="video/mp4",
+    )
+
+
+@share_bp.route("/api/videos/<short_id>/frame.jpg")
+def video_frame(short_id: str):  # type: ignore[no-untyped-def]
+    """Zwraca pojedyncza klatke z filmu jako JPG (do podglad ramki+napisu).
+
+    Query params:
+        t - timestamp w sekundach (default 1.0) - ktora klatke wyciagamy.
+            1.0s jest bezpieczny bo film zawsze trwa >2s i napis+ramka
+            sa juz widoczne.
+        dl - jesli '1' to Content-Disposition=attachment (pobieraj), inaczej
+             inline (pokazuje w browserze).
+    """
+    import subprocess
+    import tempfile
+
+    video = models.get_video_by_short_id(Config.DB_PATH, short_id)
+    if not video:
+        abort(404)
+    p = _resolve_video_path(video)
+    if p is None:
+        abort(404)
+
+    try:
+        t = float(request.args.get("t", "1.0"))
+    except ValueError:
+        t = 1.0
+    t = max(0.0, min(t, 30.0))  # clamp, safety
+    as_download = request.args.get("dl") == "1"
+
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+        frame_path = tmp.name
+
+    try:
+        # -ss przed -i = fast seek (keyframe), wystarczy dla pierwszej klatki.
+        # -vframes 1 = tylko jedna klatka. -q:v 2 = wysoka jakosc JPEG.
+        proc = subprocess.run(
+            [
+                "ffmpeg", "-y", "-ss", str(t), "-i", str(p),
+                "-vframes", "1", "-q:v", "2", frame_path,
+            ],
+            capture_output=True, timeout=15,
+        )
+        if proc.returncode != 0 or not Path(frame_path).exists():
+            log.warning("ffmpeg frame extract fail for %s: %s",
+                        short_id, proc.stderr.decode(errors="replace")[-200:])
+            abort(500)
+    except subprocess.TimeoutExpired:
+        abort(504)
+    except FileNotFoundError:
+        log.error("ffmpeg not found on PATH")
+        abort(500)
+
+    download_name = f"akces_booth_{short_id}_frame.jpg"
+    return send_file(
+        frame_path,
+        mimetype="image/jpeg",
+        as_attachment=as_download,
+        download_name=download_name,
     )
 
 

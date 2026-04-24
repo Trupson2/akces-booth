@@ -123,8 +123,27 @@
               ✕
             </button>
           </form>
+          <a href="/api/videos/{{ v.short_id }}/frame.jpg?t=1.0&dl=1"
+             class="absolute bottom-8 left-1 bg-indigo-600 hover:bg-indigo-700
+                    text-xs px-2 py-0.5 rounded
+                    opacity-0 group-hover:opacity-100 transition"
+             title="Pobierz klatke z napisem+ramka (JPG)"
+             download>
+            📸 Klatka
+          </a>
         </div>
       {% endfor %}
+    </div>
+
+    <div class="mt-4 flex gap-2">
+      <form method="POST"
+            action="{{ url_for('admin.delete_all_videos_route', event_id=event.id) }}"
+            onsubmit="return confirm('Usunac WSZYSTKIE {{ videos|length }} filmy z eventu {{ event.name }}? Operacja nieodwracalna!');">
+        <button type="submit"
+                class="bg-red-700 hover:bg-red-800 px-4 py-2 rounded text-sm">
+          🗑 Usun wszystkie filmy ({{ videos|length }})
+        </button>
+      </form>
     </div>
   </section>
 {% endif %}
