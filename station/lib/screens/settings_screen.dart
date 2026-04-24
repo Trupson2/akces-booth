@@ -2,14 +2,13 @@ import 'dart:async';
 
 import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../services/app_state_machine.dart';
 import '../services/backend_client.dart';
 import '../services/event_manager.dart';
-import '../services/local_server.dart';
 import '../services/mock_services.dart';
+import '../services/nearby_server.dart';
 import '../services/pin_service.dart';
 import '../services/settings_store.dart';
 import '../theme/app_theme.dart';
@@ -29,7 +28,7 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final conn = context.watch<ConnectivityStatus>();
     final sm = context.watch<AppStateMachine>();
-    final server = context.watch<LocalServer>();
+    final nearby = context.watch<NearbyServer>();
     final backend = context.watch<BackendClient>();
     final events = context.watch<EventManager>();
     final settings = context.watch<SettingsStore>();
@@ -100,19 +99,19 @@ class SettingsScreen extends StatelessWidget {
             ],
           ),
           _Section(
-            title: '📡 ADRES STATION (dla Recorder)',
+            title: '📡 POLACZENIE Z RECORDER (Nearby)',
             children: [
-              _ServerInfoRow(server: server),
+              _NearbyStatusRow(nearby: nearby),
             ],
           ),
           _ConnectionsSection(
             conn: conn,
             backend: backend,
-            server: server,
+            nearby: nearby,
           ),
           _StatsSection(
             sm: sm,
-            server: server,
+            nearby: nearby,
             events: events,
           ),
           _SecuritySection(),
@@ -218,32 +217,64 @@ class _Row extends StatelessWidget {
   }
 }
 
-class _ServerInfoRow extends StatelessWidget {
-  const _ServerInfoRow({required this.server});
-  final LocalServer server;
+class _NearbyStatusRow extends StatelessWidget {
+  const _NearbyStatusRow({required this.nearby});
+  final NearbyServer nearby;
 
   @override
   Widget build(BuildContext context) {
-    final ip = server.localIp ?? '?';
-    final running = server.isRunning;
-    final connected = server.isRecorderConnected;
+    final state = nearby.state;
+    final connected = nearby.isRecorderConnected;
+    final advertising = state == NearbyConnState.advertising ||
+        state == NearbyConnState.connectingRequest ||
+        connected;
+
+    final (icon, color, title, subtitle) = switch (state) {
+      NearbyConnState.idle => (
+          Icons.cloud_off_rounded,
+          AppTheme.error,
+          'Nearby wylaczony',
+          'Uruchom ponownie apke albo sprawdz permissions',
+        ),
+      NearbyConnState.advertising => (
+          Icons.wifi_tethering_rounded,
+          AppTheme.muted,
+          'Czekam na Recorder',
+          'Uruchom apke Recorder na OnePlus - sam nas znajdzie',
+        ),
+      NearbyConnState.connectingRequest => (
+          Icons.sync_rounded,
+          AppTheme.accent,
+          'Laczenie...',
+          'Recorder wyslal request, akceptujemy auto',
+        ),
+      NearbyConnState.connected => (
+          Icons.cloud_done_rounded,
+          AppTheme.success,
+          'Recorder polaczony',
+          'Bluetooth + WiFi Direct hybrid - brak hotspotu potrzebny',
+        ),
+      NearbyConnState.error => (
+          Icons.error_rounded,
+          AppTheme.error,
+          'Blad Nearby',
+          nearby.lastError ?? 'Nieznany blad',
+        ),
+    };
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
-            Icon(
-              running ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
-              color: running ? AppTheme.success : AppTheme.error,
-            ),
+            Icon(icon, color: color),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    running ? 'Serwer dziala' : 'Serwer wylaczony',
+                    title,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,
@@ -251,11 +282,9 @@ class _ServerInfoRow extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    connected
-                        ? 'Recorder polaczony'
-                        : 'Recorder nie jest polaczony',
-                    style: TextStyle(
-                      color: connected ? AppTheme.success : AppTheme.muted,
+                    subtitle,
+                    style: const TextStyle(
+                      color: AppTheme.muted,
                       fontSize: 12,
                     ),
                   ),
@@ -264,67 +293,12 @@ class _ServerInfoRow extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 12),
-        _CopyableValue(label: 'IP', value: ip),
-        const SizedBox(height: 6),
-        _CopyableValue(label: 'Port', value: '${server.port}'),
-        const SizedBox(height: 6),
-        _CopyableValue(label: 'WebSocket', value: server.webSocketUrl),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         Text(
-          'W Recorder -> Ustawienia polacz -> wpisz IP: $ip (port ${server.port}).',
-          style: const TextStyle(color: AppTheme.muted, fontSize: 12),
-        ),
-      ],
-    );
-  }
-}
-
-class _CopyableValue extends StatelessWidget {
-  const _CopyableValue({required this.label, required this.value});
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 80,
-          child: Text(label,
-              style: const TextStyle(color: AppTheme.muted, fontSize: 12)),
-        ),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppTheme.background,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: SelectableText(
-              value,
-              style: const TextStyle(
-                color: AppTheme.accent,
-                fontSize: 13,
-                fontFamily: 'monospace',
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        IconButton(
-          tooltip: 'Skopiuj',
-          icon: const Icon(Icons.copy_rounded, size: 18, color: AppTheme.muted),
-          onPressed: () {
-            Clipboard.setData(ClipboardData(text: value));
-            ScaffoldMessenger.of(context)
-              ..hideCurrentSnackBar()
-              ..showSnackBar(SnackBar(
-                content: Text('Skopiowano: $value'),
-                duration: const Duration(seconds: 2),
-              ));
-          },
+          advertising
+              ? 'Wymaga: Bluetooth + Location (GPS) on, Recorder w zasiegu ~30m'
+              : 'Serwis nie nadaje - sprobuj restart apki',
+          style: const TextStyle(color: AppTheme.muted, fontSize: 11),
         ),
       ],
     );
@@ -698,11 +672,11 @@ class _ConnectionsSection extends StatefulWidget {
   const _ConnectionsSection({
     required this.conn,
     required this.backend,
-    required this.server,
+    required this.nearby,
   });
   final ConnectivityStatus conn;
   final BackendClient backend;
-  final LocalServer server;
+  final NearbyServer nearby;
 
   @override
   State<_ConnectionsSection> createState() => _ConnectionsSectionState();
@@ -746,9 +720,9 @@ class _ConnectionsSectionState extends State<_ConnectionsSection> {
         ),
         _StatusRow(
           label: 'OnePlus 13 (Recorder)',
-          ok: widget.server.isRecorderConnected || conn.recorderOnline,
-          okText: widget.server.isRecorderConnected
-              ? 'WS polaczony'
+          ok: widget.nearby.isRecorderConnected || conn.recorderOnline,
+          okText: widget.nearby.isRecorderConnected
+              ? 'Nearby polaczony'
               : '192.168.1.45 (mock)',
           failText: 'Offline',
         ),
@@ -794,18 +768,18 @@ class _ConnectionsSectionState extends State<_ConnectionsSection> {
 class _StatsSection extends StatelessWidget {
   const _StatsSection({
     required this.sm,
-    required this.server,
+    required this.nearby,
     required this.events,
   });
   final AppStateMachine sm;
-  final LocalServer server;
+  final NearbyServer nearby;
   final EventManager events;
 
   @override
   Widget build(BuildContext context) {
     final videos = events.hasActiveEvent ? events.videoCount : sm.videoCount;
-    final recorderBattery = server.lastRecorderBattery;
-    final recorderDiskGb = server.lastRecorderDiskFreeGb;
+    final recorderBattery = nearby.lastRecorderBattery;
+    final recorderDiskGb = nearby.lastRecorderDiskFreeGb;
     return _Section(
       title: '📊 DZISIEJSZE STATYSTYKI',
       children: [
@@ -817,7 +791,7 @@ class _StatsSection extends StatelessWidget {
             recorderDiskGb != null ? '${recorderDiskGb.toStringAsFixed(1)} GB' : '-'),
         _Row(
           'Aktywna sesja',
-          server.isRecorderConnected ? 'Recorder online' : 'Recorder offline',
+          nearby.isRecorderConnected ? 'Recorder online' : 'Recorder offline',
         ),
       ],
     );

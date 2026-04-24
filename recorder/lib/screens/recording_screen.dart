@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
 import '../app.dart';
@@ -12,8 +13,8 @@ import '../services/camera_service.dart';
 import '../services/motor_controller.dart';
 import '../services/effect_templates.dart';
 import '../services/music_library.dart';
+import '../services/nearby_client.dart';
 import '../services/processing_config.dart';
-import '../services/station_client.dart';
 import '../services/video_processor.dart';
 import '../theme/app_theme.dart';
 import 'preview_screen.dart';
@@ -45,7 +46,7 @@ class _RecordingScreenState extends State<RecordingScreen>
 
   /// Cache-owane w initState - dispose() nie moze uzywac context.read
   /// (widget juz jest disposed, mounted=false).
-  StationClient? _stationClient;
+  NearbyClient? _stationClient;
   BuildContext? _cachedContext;
 
   @override
@@ -64,7 +65,7 @@ class _RecordingScreenState extends State<RecordingScreen>
     // Sluchamy komend ze Station (auto-start/stop). Nadpisujemy globalny
     // handler z app.dart - ten zostanie przywrocony w dispose.
     // Cache-ujemy referencje dla dispose (context juz nie bedzie valid).
-    final client = context.read<StationClient>();
+    final client = context.read<NearbyClient>();
     _stationClient = client;
     _cachedContext = context;
     client.onStartRequested = () {
@@ -157,7 +158,7 @@ class _RecordingScreenState extends State<RecordingScreen>
   Future<void> _toggleRecord() async {
     final camera = context.read<CameraService>();
     final motor = context.read<MotorController>();
-    final client = context.read<StationClient>();
+    final client = context.read<NearbyClient>();
 
     if (camera.isRecording) {
       await _stopRecording();
@@ -221,7 +222,7 @@ class _RecordingScreenState extends State<RecordingScreen>
 
     final camera = context.read<CameraService>();
     final motor = context.read<MotorController>();
-    final client = context.read<StationClient>();
+    final client = context.read<NearbyClient>();
     final processor = context.read<VideoProcessor>();
     // Zbieramy MusicLibrary przed await zeby nie uzywac context across async.
     final musicLib = context.read<MusicLibrary>();
@@ -327,10 +328,14 @@ class _RecordingScreenState extends State<RecordingScreen>
     }
     client.sendProcessingDone();
 
-    // Real mode: jesli Station online, wysylamy plik. Potem wracamy do Home.
+    // Real mode: jesli Station online, wysylamy plik przez Nearby (BT +
+    // WiFi Direct auto-upgrade dla wiekszych MP4). Potem wracamy do Home.
     // Mock mode / no Station: idziemy do lokalnego PreviewScreen.
     if (client.isConnected) {
-      final ok = await client.uploadVideo(finalPath);
+      final ok = await client.sendFileToStation(
+        File(finalPath),
+        shortName: p.basename(finalPath),
+      );
       if (!mounted) return;
       if (ok) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -364,7 +369,7 @@ class _RecordingScreenState extends State<RecordingScreen>
       body: Consumer<CameraService>(
         builder: (context, camera, _) {
           // Dynamic max duration z event_config (Station Settings).
-          final cfgDur = context.read<StationClient>().lastEventConfig?.videoDurationSec;
+          final cfgDur = context.read<NearbyClient>().lastEventConfig?.videoDurationSec;
           final maxDur = cfgDur != null && cfgDur >= 3 && cfgDur <= 30
               ? Duration(seconds: cfgDur)
               : _kMaxRecording;
@@ -433,9 +438,9 @@ class _RecordingScreenState extends State<RecordingScreen>
         // (landscape 16:9 = 1.77), w portrait viewport invertujemy do 9:16.
         // Stack: kamera + overlay PNG (ramka z eventu) jesli jest przypisana.
         // IgnorePointer zeby taps leciały do kamery/UI pod spodem.
-        // Consumer<StationClient> zeby reaktywnie rebuild gdy Station
+        // Consumer<NearbyClient> zeby reaktywnie rebuild gdy Station
         // wrzuci nowy overlay_url i Recorder go sciagnie.
-        return Consumer<StationClient>(
+        return Consumer<NearbyClient>(
           builder: (ctx, client, _) {
             final cfg = client.lastEventConfig;
             final overlayPath = cfg?.overlayPath;

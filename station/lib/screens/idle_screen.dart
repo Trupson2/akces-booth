@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../services/app_state_machine.dart';
 import '../services/event_manager.dart';
-import '../services/local_server.dart';
 import '../services/mock_services.dart';
+import '../services/nearby_server.dart';
 import '../services/settings_store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_counter.dart';
@@ -20,7 +20,7 @@ class IdleScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final sm = context.watch<AppStateMachine>();
     final conn = context.watch<ConnectivityStatus>();
-    final server = context.watch<LocalServer>();
+    final nearby = context.watch<NearbyServer>();
     final events = context.watch<EventManager>();
 
     return Scaffold(
@@ -66,8 +66,8 @@ class IdleScreen extends StatelessWidget {
                       StatusDot(
                         icon: Icons.phone_iphone_rounded,
                         label: 'Recorder',
-                        // Real: z WS polaczenia. Fallback: z mock serwisu.
-                        online: server.isRecorderConnected ||
+                        // Real: z Nearby Connections. Fallback: z mock serwisu.
+                        online: nearby.isRecorderConnected ||
                             conn.recorderOnline,
                       ),
                       const SizedBox(width: 8),

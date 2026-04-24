@@ -7,6 +7,7 @@ import '../services/event_manager.dart';
 import '../services/local_server.dart';
 import '../services/logger.dart';
 import '../services/mock_services.dart';
+import '../services/nearby_server.dart';
 import '../services/pending_uploads.dart';
 import '../theme/app_theme.dart';
 
@@ -18,6 +19,7 @@ class DebugPanelScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final server = context.watch<LocalServer>();
+    final nearby = context.watch<NearbyServer>();
     final backend = context.watch<BackendClient>();
     final events = context.watch<EventManager>();
     final conn = context.watch<ConnectivityStatus>();
@@ -40,18 +42,20 @@ class DebugPanelScreen extends StatelessWidget {
             title: '📡 POLACZENIA',
             children: [
               _KV('BT (fotobudka)', conn.bluetoothReady ? '✅ OK' : '❌ offline'),
-              _KV('Recorder WS',
-                  server.isRecorderConnected ? '✅ connected' : '⏳ oczekuje'),
+              _KV('Recorder Nearby',
+                  nearby.isRecorderConnected
+                      ? '✅ connected'
+                      : '⏳ ${nearby.state.name}'),
               _KV('Internet',
                   conn.internetOnline ? '✅ online' : '❌ offline'),
               _KV('Backend',
                   backend.isConfigured ? '✅ skonfigurowany' : '❌ brak'),
               if (backend.isConfigured)
                 _KV('  URL', backend.baseUrl, copyable: true),
-              _KV('Station IP',
+              _KV('Station IP (local HTTP)',
                   server.localIp ?? '-', copyable: server.localIp != null),
-              _KV('Station port', '${server.port}'),
-              _KV('Server running',
+              _KV('Local HTTP port', '${server.port}'),
+              _KV('Local HTTP running',
                   server.isRunning ? '✅' : '❌ (restart apki?)'),
             ],
           ),
@@ -60,12 +64,12 @@ class DebugPanelScreen extends StatelessWidget {
             title: '📱 RECORDER (status push co 30s)',
             children: [
               _KV('Bateria',
-                  server.lastRecorderBattery != null
-                      ? '${server.lastRecorderBattery}%'
+                  nearby.lastRecorderBattery != null
+                      ? '${nearby.lastRecorderBattery}%'
                       : '-'),
               _KV('Wolny dysk',
-                  server.lastRecorderDiskFreeGb != null
-                      ? '${server.lastRecorderDiskFreeGb!.toStringAsFixed(1)} GB'
+                  nearby.lastRecorderDiskFreeGb != null
+                      ? '${nearby.lastRecorderDiskFreeGb!.toStringAsFixed(1)} GB'
                       : '-'),
             ],
           ),

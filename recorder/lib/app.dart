@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'screens/home_screen.dart';
 import 'screens/recording_screen.dart';
-import 'services/station_client.dart';
+import 'services/nearby_client.dart';
 import 'theme/app_theme.dart';
 
 /// Globalny navigator key - uzywany zeby otworzyc RecordingScreen gdy
@@ -48,7 +48,7 @@ class _AkcesBoothRecorderState extends State<AkcesBoothRecorder> {
 /// Instaluje handler onStartRequested ktory otwiera RecordingScreen z autoStart.
 /// Wywolywany z app.dart na init i z RecordingScreen.dispose.
 void installGlobalStartHandler(BuildContext context) {
-  final client = context.read<StationClient>();
+  final client = context.read<NearbyClient>();
   client.onStartRequested = () {
     final nav = rootNavigatorKey.currentState;
     if (nav == null) return;

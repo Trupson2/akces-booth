@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'backend_client.dart';
-import 'local_server.dart';
+import 'nearby_server.dart';
 import 'settings_store.dart';
 import 'wire_protocol.dart';
 
@@ -11,17 +11,17 @@ import 'wire_protocol.dart';
 ///
 /// - Co [syncInterval] sekund pyta backend o aktywny event.
 /// - Sciaga overlay PNG + muzyke do cache Tab.
-/// - Po pobraniu wysyla konfigurację do Recordera przez LocalServer WS.
+/// - Po pobraniu wysyla konfigurację do Recordera przez Nearby Connections.
 class EventManager extends ChangeNotifier {
   EventManager({
     required this.backend,
-    required this.server,
+    required this.nearby,
     this.settings,
     this.syncInterval = const Duration(seconds: 30),
   });
 
   final BackendClient backend;
-  final LocalServer server;
+  final NearbyServer nearby;
   final SettingsStore? settings;
   final Duration syncInterval;
 
@@ -51,7 +51,7 @@ class EventManager extends ChangeNotifier {
     _poll = Timer.periodic(syncInterval, (_) => syncNow());
     // Gdy Recorder (re)connect - natychmiast push aktualny event_config.
     // Bez tego Recorder musi czekac do 30s az poll sie odpali.
-    server.onRecorderConnect = () {
+    nearby.onRecorderConnect = () {
       if (_activeEvent != null) {
         debugPrint('[EventManager] Recorder reconnect -> push config');
         _sendConfigToRecorder();
@@ -137,7 +137,7 @@ class EventManager extends ChangeNotifier {
     final e = _activeEvent;
     if (e == null) return;
     final recorderConfig = settings?.toRecorderConfig() ?? const {};
-    server.sendToRecorder({
+    nearby.sendToRecorder({
       'type': WireMsg.eventConfig,
       'event_id': e.id,
       'event_name': e.name,

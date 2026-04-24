@@ -1,8 +1,7 @@
-/// Konfig eventu przyslany ze Station.
+/// Konfig eventu przyslany ze Station przez NearbyClient.
 ///
-/// Wspolny model uzywany przez StationClient (WS) i NearbyClient (Nearby
-/// Connections). Po migracji do Nearby (Etap 3) StationClient zniknie,
-/// ale EventConfig zostaje bo to czyste DTO bez zaleznosci transportowych.
+/// Czyste DTO bez zaleznosci transportowych - wydzielone do models/ bo
+/// screens (home_screen, recording_screen) tez czytaja pola.
 class EventConfig {
   EventConfig({
     required this.eventId,

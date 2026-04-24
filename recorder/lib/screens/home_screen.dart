@@ -8,13 +8,12 @@ import 'package:provider/provider.dart';
 import '../models/motor_state.dart';
 import '../services/mock_motor_controller.dart';
 import '../services/motor_controller.dart';
+import '../services/nearby_client.dart';
 import '../services/settings_store.dart';
-import '../services/station_client.dart';
 import '../theme/app_theme.dart';
 import '../widgets/big_button.dart';
 import '../widgets/status_indicator.dart';
 import 'recording_screen.dart';
-import 'station_setup_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -220,7 +219,7 @@ class _EventBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final client = context.watch<StationClient>();
+    final client = context.watch<NearbyClient>();
     final cfg = client.lastEventConfig;
     final name = cfg?.eventName.trim();
     if (name == null || name.isEmpty) {
@@ -278,25 +277,29 @@ class _StatusColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final motor = context.watch<MotorController>();
-    final client = context.watch<StationClient>();
+    final client = context.watch<NearbyClient>();
 
     String stationValue;
     Color stationColor;
     switch (client.state) {
-      case StationConnState.connected:
-        stationValue = client.ip ?? '?';
+      case NearbyClientState.connected:
+        stationValue = 'Nearby polaczony';
         stationColor = AppTheme.success;
         break;
-      case StationConnState.connecting:
+      case NearbyClientState.discovering:
+        stationValue = 'Szukam...';
+        stationColor = AppTheme.muted;
+        break;
+      case NearbyClientState.connecting:
         stationValue = 'Lacze...';
         stationColor = AppTheme.muted;
         break;
-      case StationConnState.error:
-        stationValue = 'Blad (tap)';
+      case NearbyClientState.error:
+        stationValue = client.lastError ?? 'Blad Nearby';
         stationColor = AppTheme.error;
         break;
-      case StationConnState.disconnected:
-        stationValue = client.ip == null ? 'Skonfiguruj' : 'Brak polaczenia';
+      case NearbyClientState.idle:
+        stationValue = 'Nearby wylaczony';
         stationColor = AppTheme.muted;
         break;
     }
@@ -313,12 +316,22 @@ class _StatusColumn extends StatelessWidget {
         const SizedBox(height: 8),
         const _BatteryIndicator(),
         const SizedBox(height: 8),
+        // Nearby auto-discovery - nie ma juz Setup screena (IP config
+        // byl tylko dla WS). Tap pokazuje status dialog zeby user mial
+        // jakas akcje.
         InkWell(
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const StationSetupScreen(),
-            ),
-          ),
+          onTap: () {
+            final n = context.read<NearbyClient>();
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(
+                SnackBar(
+                  content: Text(
+                      'Nearby: ${n.state.name}${n.lastError != null ? " (${n.lastError})" : ""}'),
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+          },
           borderRadius: BorderRadius.circular(12),
           child: StatusIndicator(
             icon: Icons.tablet_mac_rounded,

@@ -8,31 +8,31 @@ import 'backend_client.dart';
 import 'event_manager.dart';
 import 'local_server.dart';
 import 'logger.dart';
+import 'nearby_server.dart';
 import 'pending_uploads.dart';
 import 'wire_protocol.dart';
 
 /// Centralny state controller - decyduje ktory ekran jest wyswietlany.
 ///
-/// Sesja 3: wszystkie przejscia zmockowane timery.
-/// Sesja 4: real WebSocket do Recorder. Mock timery zostaja jako FALLBACK
-/// gdy Recorder nie jest polaczony (dev na jednym urzadzeniu, demo).
-///
-/// Jesli `server.isRecorderConnected == true`:
-///   - startRecording() wysyla 'start_recording' do Recorder
-///   - Progress/state leci z WS, mock timery wylaczone
-/// W przeciwnym razie: stary flow mockowy.
-///
-/// UWAGA dla Sesji 6 (FFmpeg post-processing): NIE dodawac logo overlayu
-/// "Akces 360" na finalnym filmie - decyzja Adriana 17.04.2026.
+/// Etap 3 Nearby: `nearby` to Nearby Connections transport (commands, status,
+/// file transfer). `server` to LocalServer ale uzywany tylko do HTTP /local/
+/// (offline QR fallback) i registerLocalVideo. WS/upload z LocalServer sa
+/// wygaszone - wszystko idzie przez Nearby.
 class AppStateMachine extends ChangeNotifier {
   AppStateMachine({
+    this.nearby,
     this.server,
     this.backend,
     this.eventManager,
     this.pendingUploads,
   });
 
-  /// Ustawiany przez main.dart po starcie serwera.
+  /// Nearby transport do Recorder (commands + file transfer).
+  final NearbyServer? nearby;
+
+  /// LocalServer - trzymany wylacznie dla HTTP /local/<short_id> offline
+  /// fallback (PendingUploadsService) i registerLocalVideo. WS/upload
+  /// zniknely z LocalServer w Etap 3.
   final LocalServer? server;
 
   /// Klient backendu - real upload.
@@ -94,7 +94,7 @@ class AppStateMachine extends ChangeNotifier {
   AppState get errorFrom => _errorFrom;
 
   /// True jesli mamy zywe polaczenie z Recorder. Inaczej -> mock mode.
-  bool get isRealMode => server?.isRecorderConnected ?? false;
+  bool get isRealMode => nearby?.isRecorderConnected ?? false;
 
   Duration get currentStateDuration {
     switch (_state) {
@@ -111,44 +111,44 @@ class AppStateMachine extends ChangeNotifier {
     }
   }
 
-  /// Wire callbacks z LocalServer -> state machine. Wywolywane raz z main.
+  /// Wire callbacks z NearbyServer -> state machine. Wywolywane raz z main.
   void attachServer() {
-    final s = server;
-    if (s == null) return;
+    final n = nearby;
+    if (n == null) return;
 
-    s.onRecordingStarted = () {
+    n.onRecordingStarted = () {
       if (_state == AppState.recording) return; // juz jestesmy
       _enter(AppState.recording, fromRemote: true);
     };
-    s.onRecordingProgress = (p) {
+    n.onRecordingProgress = (p) {
       if (_state != AppState.recording) return;
       _progress = p;
       notifyListeners();
     };
-    s.onRecordingStopped = () {
+    n.onRecordingStopped = () {
       if (_state != AppState.recording) return;
       _enter(AppState.processing, fromRemote: true);
     };
-    s.onProcessingProgress = (p) {
+    n.onProcessingProgress = (p) {
       if (_state != AppState.processing) return;
       _progress = p;
       notifyListeners();
     };
-    s.onProcessingDone = () {
+    n.onProcessingDone = () {
       if (_state != AppState.processing) return;
       _enter(AppState.transfer, fromRemote: true);
     };
-    s.onUploadProgress = (p) {
+    n.onUploadProgress = (p) {
       if (_state != AppState.transfer) return;
       _progress = p;
       notifyListeners();
     };
-    s.onVideoReceived = (path) {
+    n.onFileReceived = (filename, path, bytes) {
       if (_state != AppState.transfer && _state != AppState.processing) {
         // Recorder moze uploadowac troche wczesniej niz dojdzie processingDone
         // - i tak chcemy go odebrac.
         debugPrint(
-            '[StateMachine] onVideoReceived in state ${_state.name}, forcing preview');
+            '[StateMachine] onFileReceived in state ${_state.name}, forcing preview');
       }
       _currentJob = VideoJob(
         id: 'rx_${DateTime.now().millisecondsSinceEpoch}',
@@ -157,7 +157,7 @@ class AppStateMachine extends ChangeNotifier {
       );
       _enter(AppState.preview, fromRemote: true);
     };
-    s.onRemoteError = (msg) {
+    n.onRemoteError = (msg) {
       Log.e('StateMachine', 'Remote error z Recorder: $msg');
       _enterError(
         title: 'Blad po stronie fotobudki',
@@ -454,17 +454,17 @@ class AppStateMachine extends ChangeNotifier {
 
   // Public actions
 
-  /// Start - wysylany z pilota/tabletu. Jesli Recorder online: komenda WS.
+  /// Start - wysylany z pilota/tabletu. Jesli Recorder online: komenda Nearby.
   /// Inaczej: mock flow.
   void startRecording() {
     if (_state != AppState.idle) return;
-    server?.sendToRecorder({'type': WireMsg.startRecording});
+    nearby?.sendToRecorder({'type': WireMsg.startRecording});
     _enter(AppState.recording);
   }
 
   void stopRecordingEarly() {
     if (_state != AppState.recording) return;
-    server?.sendToRecorder({'type': WireMsg.stopRecording});
+    nearby?.sendToRecorder({'type': WireMsg.stopRecording});
     if (!isRealMode) {
       // mock mode: nie czekamy na recorder, sami idziemy dalej.
       _enter(AppState.processing);

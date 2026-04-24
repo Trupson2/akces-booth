@@ -11,6 +11,7 @@ import 'services/local_server.dart';
 import 'services/logger.dart';
 import 'services/mock_services.dart';
 import 'services/motor_controller.dart';
+import 'services/nearby_server.dart';
 import 'services/pending_uploads.dart';
 import 'services/pin_service.dart';
 import 'services/settings_store.dart';
@@ -37,20 +38,25 @@ Future<void> main() async {
   await Log.init();
   Log.i('Station', 'boot start');
 
-  // Local server startujemy z gorki, zeby Recorder mogl sie polaczyc od razu.
+  // Nearby advertising startujemy z gorki - OP13 sam nas znajdzie.
+  // LocalServer zostaje tylko dla HTTP /local/<short_id> (offline QR fallback)
+  // - commands/file transfer idzie przez Nearby.
+  final nearby = NearbyServer();
   final server = LocalServer();
+  unawaitedStartNearby(nearby);
   unawaitedStart(server);
 
   final backend = BackendClient();
   final settings = SettingsStore();
   final eventManager = EventManager(
     backend: backend,
-    server: server,
+    nearby: nearby,
     settings: settings,
   );
   final pendingUploads = PendingUploadsService(backend: backend);
 
   final stateMachine = AppStateMachine(
+    nearby: nearby,
     server: server,
     backend: backend,
     eventManager: eventManager,
@@ -68,6 +74,7 @@ Future<void> main() async {
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider<NearbyServer>.value(value: nearby),
         ChangeNotifierProvider<LocalServer>.value(value: server),
         ChangeNotifierProvider<AppStateMachine>.value(value: stateMachine),
         ChangeNotifierProvider<EventManager>.value(value: eventManager),
@@ -91,6 +98,10 @@ Future<void> main() async {
 /// Fire-and-forget bo w initState nie mozemy awaitowac.
 void unawaitedStart(LocalServer s) {
   s.start();
+}
+
+void unawaitedStartNearby(NearbyServer n) {
+  n.start();
 }
 
 void unawaitedStartEvents(EventManager m) {

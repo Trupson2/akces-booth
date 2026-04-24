@@ -86,11 +86,14 @@ class NearbyServer extends ChangeNotifier {
   /// pliku do `received/`. Mirror LocalServer.onVideoReceived.
   void Function(String filename, String path, int bytes)? onFileReceived;
 
-  /// Ostatnio zakomunikowany "prekursor" dla file transfer (short_name, size).
-  /// Po SUCCESS payload FILE - kojarzymy z tym prekursorem.
-  /// Uzupelniane w Etap 3.
-  String? _pendingFileShortName;
-  int? _pendingFileSize;
+  /// FIFO queue pending short_name z prekursor msg `file_incoming`. Kazdy
+  /// nowy FILE payload konsumuje pierwsza nazwe. Dla P2P 1:1 wystarczy -
+  /// jeden Recorder wysyla po kolei.
+  final List<String> _pendingFileNames = [];
+
+  /// Map payload.id -> temp filePath (set na FILE payload init, read przy
+  /// SUCCESS zeby znalezc plik do przeniesienia).
+  final Map<int, String> _fileTempPaths = {};
 
   /// Stan widoczny dla UI (idle/advertising/connected).
   NearbyConnState get state => _state;
@@ -203,9 +206,14 @@ class NearbyServer extends ChangeNotifier {
         Log.w('NearbyServer', 'bytes parse fail: $e');
       }
     } else if (payload.type == PayloadType.FILE) {
-      // File path bedzie znany po _onPayloadUpdate SUCCESS.
+      // Nearby zapisuje plik do swojego temp (payload.filePath). Po
+      // SUCCESS przenosimy do received/<short_name> uzywajac prekursora.
+      final temp = payload.filePath ?? '';
+      if (temp.isNotEmpty) {
+        _fileTempPaths[payload.id] = temp;
+      }
       Log.i('NearbyServer',
-          'file payload ${payload.id} started (dest=${payload.filePath})');
+          'file payload ${payload.id} started (temp=$temp)');
     }
   }
 
@@ -254,13 +262,15 @@ class NearbyServer extends ChangeNotifier {
         sendToRecorder({'type': WireMsg.pong});
         break;
       case 'file_incoming':
-        // Prekursor przed sendFilePayload - zapisujemy kontekst dla
-        // _onPayloadUpdate SUCCESS (Etap 3 pelna obsluga).
-        _pendingFileShortName = msg['short_name']?.toString();
+        // Prekursor przed sendFilePayload - kolejkujemy short_name zeby
+        // _onPayloadUpdate wiedzial jak nazwac plik po SUCCESS.
+        final shortName = msg['short_name']?.toString();
+        if (shortName != null && shortName.isNotEmpty) {
+          _pendingFileNames.add(shortName);
+        }
         final size = msg['size'];
-        _pendingFileSize = size is num ? size.toInt() : null;
-        Log.d('NearbyServer', 'file_incoming '
-            '${_pendingFileShortName} (${_pendingFileSize}B)');
+        Log.d('NearbyServer',
+            'file_incoming $shortName (${size}B) queue=${_pendingFileNames.length}');
         break;
       default:
         debugPrint('[NearbyServer] Unknown msg type: $type');
@@ -274,21 +284,65 @@ class NearbyServer extends ChangeNotifier {
 
   Future<void> _onPayloadUpdate(
       String endpointId, PayloadTransferUpdate update) async {
-    // Nearby przenosi plik do temp path. Po SUCCESS musimy go przeniesc
-    // do naszego katalogu `received/` zeby zachowac trwalosc.
+    // BYTES SUCCESS/FAILURE zostaje no-op (dostarczenie potwierdzone przez
+    // nasz handshake message-level). Tu obsługujemy tylko FILE transfer.
+    final tempPath = _fileTempPaths.remove(update.id);
+    if (tempPath == null) {
+      // Nie znalezlismy mapowania -> to byl BYTES lub nieoczekiwany payload.
+      if (update.status == PayloadStatus.FAILURE) {
+        Log.w('NearbyServer', 'payload ${update.id} FAILURE (bytes?)');
+      }
+      return;
+    }
+
     if (update.status == PayloadStatus.SUCCESS) {
+      final shortName = _pendingFileNames.isNotEmpty
+          ? _pendingFileNames.removeAt(0)
+          : 'video_${update.id}.mp4';
+      final bytes = update.bytesTransferred;
       Log.i('NearbyServer',
-          'payload ${update.id} SUCCESS (${update.bytesTransferred}B)');
-      // TODO(Etap 3): plik payload - przeniesc z temp do received/,
-      // wywolac onFileReceived(filename, path, bytes). Na razie zapisujemy
-      // _pendingFileShortName/_pendingFileSize w _handleMessage (file_incoming
-      // prekursor) i zostawiamy pelna logike dla Etap 3.
-      _pendingFileShortName = null;
-      _pendingFileSize = null;
+          'file payload ${update.id} SUCCESS ($bytes B) -> $shortName');
+
+      try {
+        final destDir = await receivedDir();
+        final destPath = p.join(destDir, shortName);
+        final tempFile = File(tempPath);
+        if (!await tempFile.exists()) {
+          Log.w('NearbyServer', 'temp file missing: $tempPath');
+          return;
+        }
+
+        File finalFile;
+        try {
+          // Rename = atomic na tym samym FS. Nearby i receivedDir oba sa
+          // w app-private storage wiec normalnie to jest ten sam FS.
+          finalFile = await tempFile.rename(destPath);
+        } on FileSystemException {
+          // Fallback: copy + delete (gdyby cross-FS - rzadki case).
+          finalFile = await tempFile.copy(destPath);
+          try {
+            await tempFile.delete();
+          } catch (_) {}
+        }
+
+        Log.i('NearbyServer', 'file saved: ${finalFile.path}');
+        try {
+          onFileReceived?.call(shortName, finalFile.path, bytes);
+        } catch (e) {
+          Log.e('NearbyServer', 'onFileReceived cb err: $e');
+        }
+      } catch (e, st) {
+        Log.e('NearbyServer', 'file move error: $e\n$st');
+      }
     } else if (update.status == PayloadStatus.FAILURE) {
-      Log.w('NearbyServer', 'payload ${update.id} FAILURE');
-      _pendingFileShortName = null;
-      _pendingFileSize = null;
+      Log.w('NearbyServer', 'file payload ${update.id} FAILURE');
+      // Prekursor (short_name) konsumujemy zeby nie zostawic kolejki brudnej.
+      if (_pendingFileNames.isNotEmpty) _pendingFileNames.removeAt(0);
+      // Cleanup temp file jesli ostal.
+      try {
+        final f = File(tempPath);
+        if (await f.exists()) await f.delete();
+      } catch (_) {}
     }
   }
 
